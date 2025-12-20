@@ -1,91 +1,359 @@
-// Получаем элементы (после загрузки DOM)
-let canvas, ctx, startScreen, gameOverScreen, gameOverlay, startBtn, restartBtn, scoreElement, finalScoreElement;
-
-function initElements() {
-    canvas = document.getElementById('gameCanvas');
-    ctx = canvas.getContext('2d');
-    startScreen = document.getElementById('startScreen');
-    gameOverScreen = document.getElementById('gameOverScreen');
-    gameOverlay = document.getElementById('gameOverlay');
-    startBtn = document.getElementById('startBtn');
-    restartBtn = document.getElementById('restartBtn');
-    scoreElement = document.getElementById('score');
-    finalScoreElement = document.getElementById('finalScore');
+// ===== ИГРОВОЙ МОДУЛЬ =====
+const Game = {
+    // Инициализация элементов
+    canvas: null,
+    ctx: null,
     
-    // Проверка, что все элементы найдены
-    if (!canvas || !startBtn || !restartBtn) {
-        console.error('Не найдены необходимые элементы!');
-        return false;
-    }
-    return true;
-}
-
-// Функция для получения масштаба
-function getScale() {
-    return Math.min(canvas.width / 800, canvas.height / 400, 1.5);
-}
-
-// Настройка размера canvas
-function resizeCanvas() {
-    if (!canvas) {
-        console.error('Canvas не найден в resizeCanvas');
-        return;
-    }
-    const container = canvas.parentElement;
-    if (!container) {
-        console.error('Контейнер canvas не найден');
-        return;
-    }
-    const width = container.clientWidth || window.innerWidth;
-    const height = container.clientHeight || window.innerHeight;
+    // Игровые переменные
+    gameRunning: false,
+    score: 0,
+    coinsEarned: 0,
+    gameSpeed: 5,
+    gravity: 0.6,
     
-    if (width > 0 && height > 0) {
-        canvas.width = width;
-        canvas.height = height;
-        console.log('Canvas размер установлен:', width, 'x', height);
-    } else {
-        console.warn('Размер контейнера 0x0, используем значения по умолчанию');
-        canvas.width = 800;
-        canvas.height = 400;
-    }
+    // Игровые объекты
+    dino: null,
+    cacti: [],
+    coins: [],
+    mountains: [],
     
-    // Пересчитываем позиции после изменения размера
-    if (dino && dino.groundY > 0) {
-        dino.groundY = canvas.height - dino.height * getScale() - 20;
-        dino.y = Math.min(dino.y, dino.groundY);
-    }
-}
-
-// Игровые переменные
-let gameRunning = false;
-let score = 0;
-let gameSpeed = 5;
-let gravity = 0.6;
-
-// Динозавр
-const dino = {
-    x: 50,
-    y: 0,
-    width: 40,
-    height: 50,
-    velocityY: 0,
-    jumping: false,
-    groundY: 0,
-    jumpsAvailable: 2, // Двойной прыжок
-    hasDoubleJumped: false,
+    // Спавн-рейты
+    cactusSpawnRate: 0.01,
+    coinSpawnRate: 0.015,
+    mountainSpawnRate: 0.003,
     
-    draw() {
-        const scale = getScale();
+    // Счетчики для спавна
+    lastCoinSpawn: 0,
+    lastMountainSpawn: 0,
+    
+    // Инициализация
+    init() {
+        this.canvas = document.getElementById('gameCanvas');
+        if (!this.canvas) {
+            console.error('Canvas не найден!');
+            return false;
+        }
+        this.ctx = this.canvas.getContext('2d');
+        this.resizeCanvas();
+        this.initDino();
+        return true;
+    },
+    
+    // Инициализация динозавра
+    initDino() {
+        const maxJumps = Storage.getMaxJumps();
+        this.dino = {
+            x: 50,
+            y: 0,
+            width: 40,
+            height: 50,
+            velocityY: 0,
+            jumping: false,
+            groundY: 0,
+            maxJumps: maxJumps,
+            jumpsAvailable: maxJumps,
+            jumpsUsed: 0,
+            hasMask: Storage.hasMask(),
+            inMountainZone: false,
+            mountainJumps: 0
+        };
+        initDinoMethods(this.dino);
+    },
+    
+    // Получить масштаб
+    getScale() {
+        if (!this.canvas) return 1;
+        return Math.min(this.canvas.width / 800, this.canvas.height / 400, 1.5);
+    },
+    
+    // Изменить размер canvas
+    resizeCanvas() {
+        if (!this.canvas) return;
+        const container = this.canvas.parentElement;
+        if (!container) return;
+        
+        const width = container.clientWidth || window.innerWidth;
+        const height = container.clientHeight || window.innerHeight;
+        
+        if (width > 0 && height > 0) {
+            this.canvas.width = width;
+            this.canvas.height = height;
+        } else {
+            this.canvas.width = 800;
+            this.canvas.height = 400;
+        }
+        
+        if (this.dino) {
+            const scale = this.getScale();
+            this.dino.groundY = this.canvas.height - (this.dino.height * scale) - 20;
+            this.dino.y = this.dino.groundY;
+        }
+    },
+    
+    // Начать игру
+    start() {
+        if (!this.canvas || this.canvas.width === 0 || this.canvas.height === 0) {
+            this.resizeCanvas();
+        }
+        
+        // Обновляем maxJumps из магазина
+        this.initDino();
+        
+        // Сброс игры
+        this.score = 0;
+        this.coinsEarned = 0;
+        this.gameSpeed = 5;
+        this.cacti = [];
+        this.coins = [];
+        this.mountains = [];
+        this.lastCoinSpawn = 0;
+        this.lastMountainSpawn = 0;
+        
+        // Инициализация динозавра
+        const scale = this.getScale();
+        this.dino.groundY = this.canvas.height - (this.dino.height * scale) - 20;
+        this.dino.y = this.dino.groundY;
+        this.dino.velocityY = 0;
+        this.dino.jumping = false;
+        this.dino.jumpsAvailable = this.dino.maxJumps;
+        this.dino.jumpsUsed = 0;
+        this.dino.inMountainZone = false;
+        this.dino.mountainJumps = 0;
+        
+        // UI
+        UI.hideOverlay();
+        UI.showHud();
+        UI.updateScore(0);
+        UI.updateCoins(Storage.getCoins());
+        UI.updateJumpLevel(this.dino.maxJumps);
+        
+        // Запуск
+        this.gameRunning = true;
+        this.update();
+    },
+    
+    // Обновление игры
+    update() {
+        if (!this.gameRunning) return;
+        if (!this.canvas || !this.ctx) return;
+        
+        // Очистка
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Рисуем фон (небо и землю)
+        this.drawBackground();
+        
+        // Обновляем динозавра
+        if (this.dino && this.dino.update) {
+            this.dino.update();
+            this.dino.draw();
+        }
+        
+        // Спавн препятствий и монет
+        this.spawnObjects();
+        
+        // Обновляем и рисуем объекты
+        this.updateObjects();
+        
+        // Обновляем UI
+        UI.updateScore(this.score);
+        
+        // Увеличиваем счет
+        this.score += 0.1;
+        if (Math.floor(this.score) % 100 === 0 && this.gameSpeed < 12) {
+            this.gameSpeed += 0.3;
+        }
+        
+        requestAnimationFrame(() => this.update());
+    },
+    
+    // Рисование фона
+    drawBackground() {
+        // Небо
+        const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+        gradient.addColorStop(0, '#87CEEB');
+        gradient.addColorStop(0.7, '#E0F6FF');
+        gradient.addColorStop(1, '#F5F5F5');
+        this.ctx.fillStyle = gradient;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Земля
+        this.ctx.fillStyle = '#95a5a6';
+        this.ctx.fillRect(0, this.canvas.height - 20, this.canvas.width, 20);
+        
+        // Трава
+        this.ctx.fillStyle = '#7CB342';
+        this.ctx.fillRect(0, this.canvas.height - 20, this.canvas.width, 3);
+    },
+    
+    // Спавн объектов
+    spawnObjects() {
+        // Кактусы
+        if (Math.random() < this.cactusSpawnRate) {
+            this.cacti.push(new Cactus(this.canvas, this.getScale(), this.dino));
+        }
+        
+        // Монеты (пачками)
+        if (this.score - this.lastCoinSpawn > 50 && Math.random() < this.coinSpawnRate) {
+            this.spawnCoinGroup();
+            this.lastCoinSpawn = this.score;
+        }
+        
+        // Горы (только если maxJumps >= 2)
+        if (this.dino.maxJumps >= 2 && this.score - this.lastMountainSpawn > 200 && Math.random() < this.mountainSpawnRate) {
+            this.mountains.push(new Mountain(this.canvas, this.getScale(), this.dino));
+            this.lastMountainSpawn = this.score;
+        }
+    },
+    
+    // Спавн группы монет
+    spawnCoinGroup() {
+        const scale = this.getScale();
+        const x = this.canvas.width;
+        const groundY = this.dino.groundY;
+        const dinoHeight = this.dino.height * scale;
+        
+        // Создаем дугу из монет
+        const coinCount = 3 + Math.floor(Math.random() * 3); // 3-5 монет
+        const spacing = 40 * scale;
+        const startY = groundY + dinoHeight - 30 * scale; // Низкая дуга
+        const peakY = startY - 60 * scale; // Высокая точка
+        
+        for (let i = 0; i < coinCount; i++) {
+            const progress = i / (coinCount - 1);
+            const y = startY - (Math.sin(progress * Math.PI) * (startY - peakY));
+            this.coins.push(new Coin(x + i * spacing, y, scale));
+        }
+    },
+    
+    // Обновление объектов
+    updateObjects() {
+        // Кактусы
+        for (let i = this.cacti.length - 1; i >= 0; i--) {
+            const cactus = this.cacti[i];
+            cactus.update(this.gameSpeed);
+            cactus.draw(this.ctx, this.getScale());
+            
+            if (cactus.collidesWith(this.dino, this.getScale())) {
+                this.gameOver();
+                return;
+            }
+            
+            if (cactus.isOffScreen()) {
+                this.cacti.splice(i, 1);
+            }
+        }
+        
+        // Монеты
+        for (let i = this.coins.length - 1; i >= 0; i--) {
+            const coin = this.coins[i];
+            coin.update(this.gameSpeed);
+            coin.draw(this.ctx);
+            
+            if (coin.collidesWith(this.dino, this.getScale())) {
+                this.coins.splice(i, 1);
+                this.coinsEarned++;
+                Storage.addCoins(1);
+                UI.updateCoins(Storage.getCoins());
+                UI.showNotification('+1 🪙', 'success');
+            }
+            
+            if (coin.isOffScreen()) {
+                this.coins.splice(i, 1);
+            }
+        }
+        
+        // Горы
+        for (let i = this.mountains.length - 1; i >= 0; i--) {
+            const mountain = this.mountains[i];
+            mountain.update(this.gameSpeed, this.dino);
+            mountain.draw(this.ctx, this.getScale());
+            
+            if (mountain.collidesWith(this.dino, this.getScale())) {
+                this.gameOver();
+                return;
+            }
+            
+            if (mountain.isOffScreen()) {
+                this.mountains.splice(i, 1);
+            }
+        }
+    },
+    
+    // Конец игры
+    gameOver() {
+        this.gameRunning = false;
+        
+        // Сохраняем монеты
+        if (this.coinsEarned > 0) {
+            Storage.addCoins(this.coinsEarned);
+        }
+        
+        // Сохраняем рекорд
+        Storage.setHighScore(Math.floor(this.score));
+        
+        // Показываем экран Game Over
+        UI.hideHud();
+        UI.showGameOver(Math.floor(this.score), this.coinsEarned);
+    }
+};
+
+// ===== МЕТОДЫ ДИНОЗАВРА =====
+// Добавляем методы к объекту dino после его создания
+function initDinoMethods(dino) {
+    if (!dino) return;
+    
+    dino.update = function() {
+        // Гравитация
+        this.velocityY += Game.gravity;
+        this.y += this.velocityY;
+        
+        // Приземление
+        if (this.y >= this.groundY) {
+            this.y = this.groundY;
+            this.velocityY = 0;
+            this.jumping = false;
+            this.jumpsAvailable = this.maxJumps;
+            this.jumpsUsed = 0;
+            this.inMountainZone = false;
+            this.mountainJumps = 0;
+        } else {
+            this.jumping = true;
+        }
+    };
+    
+    dino.jump = function() {
+        // На земле - первый прыжок
+        if (Math.abs(this.y - this.groundY) < 2 && this.jumpsAvailable === this.maxJumps) {
+            this.velocityY = -15;
+            this.jumpsAvailable--;
+            this.jumpsUsed++;
+            if (this.inMountainZone) this.mountainJumps++;
+        }
+        // В воздухе - дополнительные прыжки
+        else if (this.y < this.groundY && this.jumpsAvailable > 0) {
+            this.velocityY = -18;
+            this.jumpsAvailable--;
+            this.jumpsUsed++;
+            if (this.inMountainZone) this.mountainJumps++;
+        }
+    };
+    
+    dino.draw = function() {
+        const scale = Game.getScale();
         const scaledWidth = this.width * scale;
         const scaledHeight = this.height * scale;
         const scaledX = this.x * scale;
         const scaledY = this.y;
+        const ctx = Game.ctx;
         
+        // Тело
         ctx.fillStyle = '#333';
-        // Тело динозавра
         ctx.fillRect(scaledX, scaledY, scaledWidth, scaledHeight);
+        
         // Голова
         ctx.fillRect(scaledX + scaledWidth * 0.75, scaledY - scaledHeight * 0.2, scaledWidth * 0.375, scaledHeight * 0.3);
+        
         // Рог
         ctx.fillStyle = '#ff6b35';
         ctx.beginPath();
@@ -94,90 +362,54 @@ const dino = {
         ctx.lineTo(scaledX + scaledWidth * 0.85, scaledY - scaledHeight * 0.35);
         ctx.closePath();
         ctx.fill();
-        // Глаз
-        ctx.fillStyle = 'white';
-        ctx.fillRect(scaledX + scaledWidth * 0.875, scaledY - scaledHeight * 0.16, scaledWidth * 0.125, scaledHeight * 0.1);
+        
+        // Маска (если куплена)
+        if (this.hasMask) {
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(scaledX + scaledWidth * 0.7, scaledY - scaledHeight * 0.15, scaledWidth * 0.5, scaledHeight * 0.25);
+            // Прорези для глаз
+            ctx.fillStyle = '#333';
+            ctx.fillRect(scaledX + scaledWidth * 0.8, scaledY - scaledHeight * 0.1, scaledWidth * 0.1, scaledHeight * 0.08);
+            ctx.fillRect(scaledX + scaledWidth * 0.95, scaledY - scaledHeight * 0.1, scaledWidth * 0.1, scaledHeight * 0.08);
+        } else {
+            // Глаз
+            ctx.fillStyle = 'white';
+            ctx.fillRect(scaledX + scaledWidth * 0.875, scaledY - scaledHeight * 0.16, scaledWidth * 0.125, scaledHeight * 0.1);
+        }
+        
         // Ноги
         ctx.fillStyle = '#333';
         ctx.fillRect(scaledX + scaledWidth * 0.125, scaledY + scaledHeight, scaledWidth * 0.2, scaledHeight * 0.2);
         ctx.fillRect(scaledX + scaledWidth * 0.625, scaledY + scaledHeight, scaledWidth * 0.2, scaledHeight * 0.2);
-    },
-    
-    update() {
-        // Применяем гравитацию
-        this.velocityY += gravity;
-        this.y += this.velocityY;
-        
-        // Проверка земли
-        if (this.y >= this.groundY) {
-            this.y = this.groundY;
-            this.velocityY = 0;
-            this.jumping = false;
-            this.jumpsAvailable = 2; // Восстанавливаем двойной прыжок при приземлении
-            this.hasDoubleJumped = false;
-        } else {
-            this.jumping = true;
-        }
-    },
-    
-    jump() {
-        // Если на земле - первый прыжок
-        if (Math.abs(this.y - this.groundY) < 2 && this.jumpsAvailable === 2) {
-            this.velocityY = -15;
-            this.jumping = true;
-            this.jumpsAvailable = 1; // Остался один прыжок
-        }
-        // Если в воздухе и есть доступный прыжок - двойной прыжок (выше)
-        else if (this.y < this.groundY && this.jumpsAvailable === 1 && !this.hasDoubleJumped) {
-            this.velocityY = -18; // Выше чем первый прыжок
-            this.jumpsAvailable = 0;
-            this.hasDoubleJumped = true;
-        }
-    },
-    
-    reset() {
-        this.y = this.groundY;
-        this.velocityY = 0;
-        this.jumping = false;
-        this.jumpsAvailable = 2;
-        this.hasDoubleJumped = false;
-    }
-};
+    };
+}
 
-// Кактусы
-const cacti = [];
-const cactusSpawnRate = 0.01;
-
+// ===== КАКТУС =====
 class Cactus {
-    constructor() {
+    constructor(canvas, scale, dino) {
         this.x = canvas.width;
-        const scale = getScale();
         this.width = 30 * scale;
         this.height = (50 + Math.random() * 20) * scale;
         const dinoScaledHeight = dino.height * scale;
         this.y = dino.groundY + dinoScaledHeight - this.height;
     }
     
-    draw() {
-        const scale = getScale();
-        ctx.fillStyle = '#2ecc71';
-        // Основной ствол
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-        // Ветки
-        ctx.fillRect(this.x - 5 * scale, this.y + 10 * scale, 10 * scale, 8 * scale);
-        ctx.fillRect(this.x + this.width - 5 * scale, this.y + 20 * scale, 10 * scale, 8 * scale);
+    update(speed) {
+        this.x -= speed;
     }
     
-    update() {
-        this.x -= gameSpeed;
+    draw(ctx, scale) {
+        ctx.fillStyle = '#2ecc71';
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+        ctx.fillRect(this.x - 5 * scale, this.y + 10 * scale, 10 * scale, 8 * scale);
+        ctx.fillRect(this.x + this.width - 5 * scale, this.y + 20 * scale, 10 * scale, 8 * scale);
     }
     
     isOffScreen() {
         return this.x + this.width < 0;
     }
     
-    collidesWith(dino) {
-        const scale = getScale();
+    collidesWith(dino, scale) {
         const dinoScaledWidth = dino.width * scale;
         const dinoScaledHeight = dino.height * scale;
         const dinoX = dino.x * scale;
@@ -189,241 +421,208 @@ class Cactus {
     }
 }
 
-// Инициализация
-function init() {
-    if (!canvas || canvas.width === 0 || canvas.height === 0) {
-        console.error('Canvas не готов для инициализации!');
-        return;
+// ===== МОНЕТА =====
+class Coin {
+    constructor(x, y, scale) {
+        this.x = x;
+        this.y = y;
+        this.radius = 12 * scale;
+        this.rotation = 0;
     }
     
-    const scale = getScale();
-    dino.groundY = canvas.height - (dino.height * scale) - 20;
-    dino.y = dino.groundY;
-    dino.reset();
-    cacti.length = 0;
-    score = 0;
-    gameSpeed = 5;
-    updateScore();
+    update(speed) {
+        this.x -= speed;
+        this.rotation += 0.2;
+    }
     
-    console.log('Игра инициализирована, groundY:', dino.groundY);
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        
+        // Монета
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Ободок
+        ctx.strokeStyle = '#FFA500';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Символ
+        ctx.fillStyle = '#FFA500';
+        ctx.font = `${this.radius * 0.8}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🪙', 0, 0);
+        
+        ctx.restore();
+    }
+    
+    isOffScreen() {
+        return this.x + this.radius < 0;
+    }
+    
+    collidesWith(dino, scale) {
+        const dinoX = dino.x * scale;
+        const dinoY = dino.y;
+        const dinoWidth = dino.width * scale;
+        const dinoHeight = dino.height * scale;
+        
+        const dx = this.x - (dinoX + dinoWidth / 2);
+        const dy = this.y - (dinoY + dinoHeight / 2);
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        return distance < this.radius + Math.min(dinoWidth, dinoHeight) / 2;
+    }
 }
 
-// Обновление игры
-function update() {
-    if (!gameRunning) {
-        return;
+// ===== ГОРА =====
+class Mountain {
+    constructor(canvas, scale, dino) {
+        this.x = canvas.width;
+        this.width = 120 * scale; // Широкая гора
+        this.height = 80 * scale;
+        const dinoScaledHeight = dino.height * scale;
+        this.y = dino.groundY + dinoScaledHeight - this.height;
+        this.requiredJumps = 2; // Требуется минимум 2 прыжка
     }
     
-    if (!canvas || !ctx) {
-        console.error('Canvas или ctx не инициализированы в update()!');
-        return;
-    }
-    
-    // Очистка canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Рисуем землю
-    ctx.fillStyle = '#95a5a6';
-    ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
-    
-    // Обновляем динозавра
-    dino.update();
-    dino.draw();
-    
-    // Спавн кактусов
-    if (Math.random() < cactusSpawnRate) {
-        cacti.push(new Cactus());
-    }
-    
-    // Обновляем и рисуем кактусы
-    for (let i = cacti.length - 1; i >= 0; i--) {
-        const cactus = cacti[i];
-        cactus.update();
-        cactus.draw();
+    update(speed, dino) {
+        this.x -= speed;
         
-        // Проверка столкновения
-        if (cactus.collidesWith(dino)) {
-            gameOver();
-            return;
+        // Проверяем, находится ли динозавр в зоне горы
+        const dinoX = dino.x * Game.getScale();
+        if (dinoX >= this.x && dinoX <= this.x + this.width) {
+            dino.inMountainZone = true;
+        } else if (dinoX > this.x + this.width) {
+            // Прошли гору - проверяем, сделал ли достаточно прыжков
+            if (dino.inMountainZone && dino.mountainJumps < this.requiredJumps) {
+                // Недостаточно прыжков - столкновение
+                Game.gameOver();
+            }
+            dino.inMountainZone = false;
+            dino.mountainJumps = 0;
         }
+    }
+    
+    draw(ctx, scale) {
+        // Гора (коричневая)
+        ctx.fillStyle = '#8B4513';
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y + this.height);
+        ctx.lineTo(this.x + this.width / 2, this.y);
+        ctx.lineTo(this.x + this.width, this.y + this.height);
+        ctx.closePath();
+        ctx.fill();
         
-        // Удаляем кактусы за экраном
-        if (cactus.isOffScreen()) {
-            cacti.splice(i, 1);
-            score += 10;
-            updateScore();
-            // Увеличиваем скорость каждые 100 очков
-            if (score % 100 === 0 && gameSpeed < 12) {
-                gameSpeed += 0.5;
+        // Снег на вершине
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.moveTo(this.x + this.width / 2 - 10 * scale, this.y);
+        ctx.lineTo(this.x + this.width / 2 + 10 * scale, this.y);
+        ctx.lineTo(this.x + this.width / 2, this.y + 15 * scale);
+        ctx.closePath();
+        ctx.fill();
+    }
+    
+    isOffScreen() {
+        return this.x + this.width < 0;
+    }
+    
+    collidesWith(dino, scale) {
+        const dinoX = dino.x * scale;
+        const dinoY = dino.y;
+        const dinoWidth = dino.width * scale;
+        const dinoHeight = dino.height * scale;
+        
+        // Проверка столкновения с горой
+        if (dinoX < this.x + this.width &&
+            dinoX + dinoWidth > this.x &&
+            dinoY < this.y + this.height &&
+            dinoY + dinoHeight > this.y) {
+            
+            // Если в зоне горы и недостаточно прыжков
+            if (dino.inMountainZone && dino.mountainJumps < this.requiredJumps) {
+                return true;
             }
         }
+        
+        return false;
     }
-    
-    requestAnimationFrame(update);
 }
 
-// Обновление счета
-function updateScore() {
-    scoreElement.textContent = score;
-}
-
-// Начало игры
-function startGame() {
-    console.log('=== startGame вызвана ===');
-    
-    // Убеждаемся, что canvas инициализирован
-    if (!canvas) {
-        console.error('Canvas не найден!');
-        return;
-    }
-    
-    if (canvas.width === 0 || canvas.height === 0) {
-        console.log('Canvas размер 0x0, вызываю resizeCanvas');
-        resizeCanvas();
-        // Если все еще 0, устанавливаем значения по умолчанию
-        if (canvas.width === 0 || canvas.height === 0) {
-            canvas.width = 800;
-            canvas.height = 400;
-            console.log('Установлены значения по умолчанию для canvas');
-        }
-    }
-    
-    // Инициализируем игру
-    init();
-    
-    // Устанавливаем флаг запуска
-    gameRunning = true;
-    
-    // Скрываем overlay
-    if (gameOverlay) {
-        gameOverlay.classList.add('hidden');
-        console.log('Overlay скрыт');
-    } else {
-        console.error('gameOverlay не найден!');
-    }
-    
-    console.log('Игра запущена, gameRunning:', gameRunning);
-    console.log('Canvas размер:', canvas.width, 'x', canvas.height);
-    console.log('Dino позиция:', dino.x, dino.y, 'groundY:', dino.groundY);
-    
-    // Запускаем игровой цикл
-    console.log('Запускаю update()');
-    update();
-}
-
-// Конец игры
-function gameOver() {
-    gameRunning = false;
-    finalScoreElement.textContent = score;
-    gameOverScreen.classList.remove('hidden');
-    gameOverlay.classList.remove('hidden');
-}
-
-// Перезапуск
-function restartGame() {
-    gameOverScreen.classList.add('hidden');
-    startGame();
-}
-
-// Управление клавиатурой
+// ===== УПРАВЛЕНИЕ =====
 document.addEventListener('keydown', (e) => {
     if (e.code === 'Space' || e.key === 'ArrowUp') {
         e.preventDefault();
-        if (gameRunning) {
-            dino.jump();
-        } else if (gameOverlay.classList.contains('hidden')) {
-            startGame();
+        if (Game.gameRunning) {
+            Game.dino.jump();
+        }
+    }
+    
+    // Пауза
+    if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+        if (Game.gameRunning) {
+            Game.gameRunning = false;
+            UI.showNotification('Пауза', 'info');
         }
     }
 });
 
-// Управление касанием (для мобильных)
-let touchStartY = 0;
-let touchStartTime = 0;
-
-// Функция для привязки обработчиков canvas
+// Касание для мобильных
 function attachCanvasHandlers() {
-    if (!canvas) {
-        console.error('Canvas не найден для привязки обработчиков');
-        return;
-    }
+    const canvas = Game.canvas;
+    if (!canvas) return;
     
     canvas.addEventListener('touchstart', (e) => {
         e.preventDefault();
-        touchStartY = e.touches[0].clientY;
-        touchStartTime = Date.now();
-        if (gameRunning) {
-            dino.jump();
-        } else if (gameOverlay && gameOverlay.classList.contains('hidden')) {
-            startGame();
+        if (Game.gameRunning) {
+            Game.dino.jump();
         }
-    });
-
-    canvas.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        // Можно добавить логику для свайпа вверх
-    });
-
-    // Предотвращаем скролл при касании canvas
+    }, { passive: false });
+    
     canvas.addEventListener('touchmove', (e) => {
-        e.preventDefault();
+        if (Game.gameRunning) {
+            e.preventDefault();
+        }
     }, { passive: false });
 }
 
-// Функция для привязки обработчиков кнопок
-function attachButtonHandlers() {
-    if (!startBtn || !restartBtn) return;
+// ===== ИНИЦИАЛИЗАЦИЯ =====
+window.addEventListener('load', async () => {
+    // Инициализация Auth
+    await Auth.bootstrap();
     
-    // Кнопки - обработчики клика
-    startBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        startGame();
-    });
-
-    restartBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        restartGame();
-    });
-
-    // Кнопки - обработчики касания (для мобильных)
-    startBtn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        startGame();
-    });
-
-    restartBtn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        restartGame();
-    });
-}
-
-// Предотвращаем стандартное поведение при свайпе вниз (чтобы не закрывалась страница)
-// Но только если не кликаем по кнопкам
-document.addEventListener('touchmove', (e) => {
-    if (gameRunning && !e.target.closest('button')) {
-        e.preventDefault();
-    }
-}, { passive: false });
-
-// Инициализация при загрузке
-window.addEventListener('load', () => {
-    if (!initElements()) {
-        console.error('Ошибка инициализации элементов');
+    // Инициализация Storage (загрузит облачные данные если залогинен)
+    await Storage.init();
+    
+    // Инициализация игры
+    if (!Game.init()) {
+        console.error('Ошибка инициализации игры');
         return;
     }
-    attachButtonHandlers();
-    attachCanvasHandlers();
-    resizeCanvas();
-    init();
     
-    // Обработчики изменения размера окна
-    window.addEventListener('resize', resizeCanvas);
-    window.addEventListener('orientationchange', () => {
-        setTimeout(resizeCanvas, 100);
+    // Инициализация модулей
+    await UI.init();
+    Shop.init();
+    
+    // Показываем Home экран
+    UI.showScreen('homeScreen');
+    
+    // Обработчики изменения размера
+    window.addEventListener('resize', () => {
+        Game.resizeCanvas();
     });
+    
+    window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+            Game.resizeCanvas();
+        }, 100);
+    });
+    
+    // Привязка обработчиков canvas
+    attachCanvasHandlers();
 });
-

@@ -6,31 +6,152 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>Динозавр - Игра</title>
+    <title>🦕 Динозавр - Игра</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="game-container">
-        <div class="game-wrapper">
-            <canvas id="gameCanvas"></canvas>
-            <div class="game-overlay" id="gameOverlay">
-                <div class="start-screen" id="startScreen">
-                    <h1>🦕 Динозавр</h1>
-                    <p>Нажми ПРОБЕЛ или стрелку ВВЕРХ, чтобы прыгать</p>
-                    <p>💫 Двойной прыжок: нажми дважды для высокого прыжка!</p>
-                    <p>Избегай кактусов!</p>
-                    <button id="startBtn">Начать игру</button>
-                </div>
-                <div class="game-over-screen hidden" id="gameOverScreen">
-                    <h2>Игра окончена!</h2>
-                    <p>Счет: <span id="finalScore">0</span></p>
-                    <button id="restartBtn">Играть снова</button>
+        <!-- HUD во время игры -->
+        <div class="game-hud hidden" id="gameHud">
+            <div class="hud-left">
+                <div class="hud-score">
+                    <span class="hud-label">Счет</span>
+                    <span class="hud-value" id="hudScore">0</span>
                 </div>
             </div>
-            <div class="score">Счет: <span id="score">0</span></div>
+            <div class="hud-right">
+                <div class="hud-coins">
+                    <span class="coin-icon">🪙</span>
+                    <span class="hud-value" id="hudCoins">0</span>
+                </div>
+                <div class="hud-jump-level">
+                    <span class="jump-icon">💫</span>
+                    <span class="hud-value" id="hudJumpLevel">x1</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Игровой canvas -->
+        <div class="game-wrapper">
+            <canvas id="gameCanvas"></canvas>
+            
+            <!-- Overlay для всех экранов -->
+            <div class="game-overlay" id="gameOverlay">
+                <!-- Home экран -->
+                <div class="screen home-screen" id="homeScreen">
+                    <div class="screen-content">
+                        <h1 class="game-title">🦕 Динозавр</h1>
+                        
+                        <!-- Статус аккаунта -->
+                        <div class="auth-status">
+                            <div class="auth-status-text" id="authStatus">Гость</div>
+                            <button class="btn btn-small btn-secondary" id="authBtn">Войти / Аккаунт</button>
+                        </div>
+                        
+                        <div class="home-stats">
+                            <div class="stat-card">
+                                <span class="stat-label">Монеты</span>
+                                <span class="stat-value" id="homeCoins">0</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">Рекорд</span>
+                                <span class="stat-value" id="homeHighScore">0</span>
+                            </div>
+                        </div>
+                        <div class="button-group">
+                            <button class="btn btn-primary" id="playBtn">
+                                <span class="btn-icon">▶</span>
+                                Играть
+                            </button>
+                            <button class="btn btn-secondary" id="shopBtn">
+                                <span class="btn-icon">🛒</span>
+                                Магазин
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Экран авторизации -->
+                <div class="screen auth-screen hidden" id="authScreen">
+                    <div class="screen-content">
+                        <div class="shop-header">
+                            <h2 class="screen-title">Вход / Регистрация</h2>
+                            <button class="btn-close" id="closeAuthBtn">✕</button>
+                        </div>
+                        
+                        <div id="authError" class="auth-error hidden"></div>
+                        
+                        <div class="auth-form">
+                            <input type="email" id="authEmail" placeholder="Email" class="auth-input" />
+                            <input type="password" id="authPassword" placeholder="Пароль" class="auth-input" />
+                            
+                            <div class="button-group">
+                                <button class="btn btn-primary" id="signInBtn">Войти</button>
+                                <button class="btn btn-secondary" id="signUpBtn">Зарегистрироваться</button>
+                            </div>
+                            
+                            <div id="authLoggedIn" class="auth-logged-in hidden">
+                                <div class="auth-user-info">
+                                    <p>Вы вошли как: <strong id="authUserEmail"></strong></p>
+                                </div>
+                                <button class="btn btn-secondary" id="signOutBtn">Выйти</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Экран Game Over -->
+                <div class="screen game-over-screen hidden" id="gameOverScreen">
+                    <div class="screen-content">
+                        <h2 class="screen-title">Игра окончена!</h2>
+                        <div class="result-stats">
+                            <div class="result-item">
+                                <span class="result-label">Счет</span>
+                                <span class="result-value" id="finalScore">0</span>
+                            </div>
+                            <div class="result-item">
+                                <span class="result-label">Монеты</span>
+                                <span class="result-value" id="finalCoins">+0</span>
+                            </div>
+                        </div>
+                        <div class="button-group">
+                            <button class="btn btn-primary" id="restartBtn">Играть снова</button>
+                            <button class="btn btn-secondary" id="homeBtn">Домой</button>
+                            <button class="btn btn-secondary" id="shopBtnFromGameOver">Магазин</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Экран магазина -->
+                <div class="screen shop-screen hidden" id="shopScreen">
+                    <div class="screen-content">
+                        <div class="shop-header">
+                            <h2 class="screen-title">Магазин</h2>
+                            <button class="btn-close" id="closeShopBtn">✕</button>
+                        </div>
+                        <div class="shop-balance">
+                            <span class="coin-icon">🪙</span>
+                            <span class="balance-value" id="shopBalance">0</span>
+                        </div>
+                        <div class="shop-items" id="shopItems">
+                            <!-- Товары будут добавлены через JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+
+    <!-- Всплывающие уведомления -->
+    <div class="notification" id="notification"></div>
+
+    <!-- Supabase и модули -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabaseClient.js"></script>
+    <script src="storage.js"></script>
+    <script src="auth.js"></script>
     <script src="game.js"></script>
+    <script src="shop.js"></script>
+    <script src="ui.js"></script>
 </body>
 </html>
-
