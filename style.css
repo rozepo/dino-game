@@ -71,6 +71,9 @@ body {
     text-align: center;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     max-width: 400px;
+    pointer-events: auto;
+    z-index: 20;
+    position: relative;
 }
 
 .start-screen h1 {
@@ -116,6 +119,10 @@ button {
     margin-top: 20px;
     transition: transform 0.2s, box-shadow 0.2s;
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    pointer-events: auto;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
 }
 
 button:hover {

@@ -1,13 +1,24 @@
-// Получаем элементы
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-const startScreen = document.getElementById('startScreen');
-const gameOverScreen = document.getElementById('gameOverScreen');
-const gameOverlay = document.getElementById('gameOverlay');
-const startBtn = document.getElementById('startBtn');
-const restartBtn = document.getElementById('restartBtn');
-const scoreElement = document.getElementById('score');
-const finalScoreElement = document.getElementById('finalScore');
+// Получаем элементы (после загрузки DOM)
+let canvas, ctx, startScreen, gameOverScreen, gameOverlay, startBtn, restartBtn, scoreElement, finalScoreElement;
+
+function initElements() {
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
+    startScreen = document.getElementById('startScreen');
+    gameOverScreen = document.getElementById('gameOverScreen');
+    gameOverlay = document.getElementById('gameOverlay');
+    startBtn = document.getElementById('startBtn');
+    restartBtn = document.getElementById('restartBtn');
+    scoreElement = document.getElementById('score');
+    finalScoreElement = document.getElementById('finalScore');
+    
+    // Проверка, что все элементы найдены
+    if (!canvas || !startBtn || !restartBtn) {
+        console.error('Не найдены необходимые элементы!');
+        return false;
+    }
+    return true;
+}
 
 // Функция для получения масштаба
 function getScale() {
@@ -16,7 +27,9 @@ function getScale() {
 
 // Настройка размера canvas
 function resizeCanvas() {
+    if (!canvas) return;
     const container = canvas.parentElement;
+    if (!container) return;
     canvas.width = container.clientWidth;
     canvas.height = container.clientHeight;
     // Пересчитываем позиции после изменения размера
@@ -25,13 +38,6 @@ function resizeCanvas() {
         dino.y = Math.min(dino.y, dino.groundY);
     }
 }
-
-// Инициализация размера canvas
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
-window.addEventListener('orientationchange', () => {
-    setTimeout(resizeCanvas, 100);
-});
 
 // Игровые переменные
 let gameRunning = false;
@@ -289,20 +295,59 @@ canvas.addEventListener('touchmove', (e) => {
     e.preventDefault();
 }, { passive: false });
 
-// Кнопки
-startBtn.addEventListener('click', startGame);
-restartBtn.addEventListener('click', restartGame);
+// Функция для привязки обработчиков кнопок
+function attachButtonHandlers() {
+    if (!startBtn || !restartBtn) return;
+    
+    // Кнопки - обработчики клика
+    startBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        startGame();
+    });
+
+    restartBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        restartGame();
+    });
+
+    // Кнопки - обработчики касания (для мобильных)
+    startBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        startGame();
+    });
+
+    restartBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        restartGame();
+    });
+}
 
 // Предотвращаем стандартное поведение при свайпе вниз (чтобы не закрывалась страница)
+// Но только если не кликаем по кнопкам
 document.addEventListener('touchmove', (e) => {
-    if (gameRunning) {
+    if (gameRunning && !e.target.closest('button')) {
         e.preventDefault();
     }
 }, { passive: false });
 
 // Инициализация при загрузке
 window.addEventListener('load', () => {
+    if (!initElements()) {
+        console.error('Ошибка инициализации элементов');
+        return;
+    }
+    attachButtonHandlers();
     resizeCanvas();
     init();
+    
+    // Обработчики изменения размера окна
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', () => {
+        setTimeout(resizeCanvas, 100);
+    });
 });
 
