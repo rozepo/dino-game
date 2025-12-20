@@ -27,13 +27,30 @@ function getScale() {
 
 // Настройка размера canvas
 function resizeCanvas() {
-    if (!canvas) return;
+    if (!canvas) {
+        console.error('Canvas не найден в resizeCanvas');
+        return;
+    }
     const container = canvas.parentElement;
-    if (!container) return;
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
+    if (!container) {
+        console.error('Контейнер canvas не найден');
+        return;
+    }
+    const width = container.clientWidth || window.innerWidth;
+    const height = container.clientHeight || window.innerHeight;
+    
+    if (width > 0 && height > 0) {
+        canvas.width = width;
+        canvas.height = height;
+        console.log('Canvas размер установлен:', width, 'x', height);
+    } else {
+        console.warn('Размер контейнера 0x0, используем значения по умолчанию');
+        canvas.width = 800;
+        canvas.height = 400;
+    }
+    
     // Пересчитываем позиции после изменения размера
-    if (dino.groundY > 0) {
+    if (dino && dino.groundY > 0) {
         dino.groundY = canvas.height - dino.height * getScale() - 20;
         dino.y = Math.min(dino.y, dino.groundY);
     }
@@ -174,6 +191,11 @@ class Cactus {
 
 // Инициализация
 function init() {
+    if (!canvas || canvas.width === 0 || canvas.height === 0) {
+        console.error('Canvas не готов для инициализации!');
+        return;
+    }
+    
     const scale = getScale();
     dino.groundY = canvas.height - (dino.height * scale) - 20;
     dino.y = dino.groundY;
@@ -182,11 +204,20 @@ function init() {
     score = 0;
     gameSpeed = 5;
     updateScore();
+    
+    console.log('Игра инициализирована, groundY:', dino.groundY);
 }
 
 // Обновление игры
 function update() {
-    if (!gameRunning) return;
+    if (!gameRunning) {
+        return;
+    }
+    
+    if (!canvas || !ctx) {
+        console.error('Canvas или ctx не инициализированы в update()!');
+        return;
+    }
     
     // Очистка canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -238,9 +269,45 @@ function updateScore() {
 
 // Начало игры
 function startGame() {
+    console.log('=== startGame вызвана ===');
+    
+    // Убеждаемся, что canvas инициализирован
+    if (!canvas) {
+        console.error('Canvas не найден!');
+        return;
+    }
+    
+    if (canvas.width === 0 || canvas.height === 0) {
+        console.log('Canvas размер 0x0, вызываю resizeCanvas');
+        resizeCanvas();
+        // Если все еще 0, устанавливаем значения по умолчанию
+        if (canvas.width === 0 || canvas.height === 0) {
+            canvas.width = 800;
+            canvas.height = 400;
+            console.log('Установлены значения по умолчанию для canvas');
+        }
+    }
+    
+    // Инициализируем игру
     init();
+    
+    // Устанавливаем флаг запуска
     gameRunning = true;
-    gameOverlay.classList.add('hidden');
+    
+    // Скрываем overlay
+    if (gameOverlay) {
+        gameOverlay.classList.add('hidden');
+        console.log('Overlay скрыт');
+    } else {
+        console.error('gameOverlay не найден!');
+    }
+    
+    console.log('Игра запущена, gameRunning:', gameRunning);
+    console.log('Canvas размер:', canvas.width, 'x', canvas.height);
+    console.log('Dino позиция:', dino.x, dino.y, 'groundY:', dino.groundY);
+    
+    // Запускаем игровой цикл
+    console.log('Запускаю update()');
     update();
 }
 
