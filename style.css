@@ -443,6 +443,21 @@ body {
 }
 
 /* ===== Адаптивность ===== */
+@media (max-width: 768px) {
+    .game-wrapper {
+        /* Убеждаемся, что игровое поле не уезжает вниз */
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: env(safe-area-inset-top, 0);
+    }
+    
+    #gameCanvas {
+        /* Canvas должен быть виден полностью */
+        object-fit: contain;
+    }
+}
+
 @media (max-width: 480px) {
     .screen-content {
         padding: 24px 16px;

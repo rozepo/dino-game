@@ -8,23 +8,31 @@ const Game = {
     gameRunning: false,
     score: 0,
     coinsEarned: 0,
-    gameSpeed: 5,
-    gravity: 0.6,
+    gameSpeed: 5, // Базовая скорость (пикселей в секунду)
+    gravity: 600, // Гравитация (пикселей в секунду²)
+    baseSpeed: 200, // Базовая скорость в пикселях/сек
+    
+    // Time-based переменные
+    lastTime: 0,
+    elapsedTime: 0, // Время игры в секундах
     
     // Игровые объекты
     dino: null,
     cacti: [],
+    flowers: [],
     coins: [],
     mountains: [],
     
-    // Спавн-рейты
-    cactusSpawnRate: 0.01,
-    coinSpawnRate: 0.015,
-    mountainSpawnRate: 0.003,
+    // Спавн-таймеры (в секундах)
+    coinTimer: 0,
+    obstacleTimer: 0,
+    mountainCooldown: 0,
     
-    // Счетчики для спавна
-    lastCoinSpawn: 0,
-    lastMountainSpawn: 0,
+    // Минимальная дистанция между препятствиями (в пикселях)
+    minObstacleDistance: 0,
+    
+    // Стадии игры
+    gameStage: 'early', // early / mid / late
     
     // Инициализация
     init() {
@@ -102,12 +110,18 @@ const Game = {
         // Сброс игры
         this.score = 0;
         this.coinsEarned = 0;
-        this.gameSpeed = 5;
+        this.baseSpeed = 200;
+        this.elapsedTime = 0;
+        this.lastTime = performance.now();
+        this.gameStage = 'early';
         this.cacti = [];
+        this.flowers = [];
         this.coins = [];
         this.mountains = [];
-        this.lastCoinSpawn = 0;
-        this.lastMountainSpawn = 0;
+        this.coinTimer = 0;
+        this.obstacleTimer = 0;
+        this.mountainCooldown = 0;
+        this.minObstacleDistance = 0;
         
         // Инициализация динозавра
         const scale = this.getScale();
@@ -129,13 +143,34 @@ const Game = {
         
         // Запуск
         this.gameRunning = true;
-        this.update();
+        this.lastTime = performance.now();
+        this.update(performance.now());
     },
     
-    // Обновление игры
-    update() {
+    // Обновление игры (time-based)
+    update(currentTime = performance.now()) {
         if (!this.gameRunning) return;
         if (!this.canvas || !this.ctx) return;
+        
+        // Вычисляем deltaTime
+        if (this.lastTime === 0) {
+            this.lastTime = currentTime;
+        }
+        
+        let dt = (currentTime - this.lastTime) / 1000; // В секундах
+        this.lastTime = currentTime;
+        
+        // Ограничиваем максимальный dt (защита от телепортов)
+        dt = Math.min(dt, 0.1);
+        
+        // Обновляем время игры
+        this.elapsedTime += dt;
+        
+        // Обновляем стадию игры
+        this.updateGameStage();
+        
+        // Обновляем скорость (увеличивается со временем)
+        this.updateSpeed(dt);
         
         // Очистка
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -143,28 +178,47 @@ const Game = {
         // Рисуем фон (небо и землю)
         this.drawBackground();
         
-        // Обновляем динозавра
+        // Обновляем динозавра (с dt)
         if (this.dino && this.dino.update) {
-            this.dino.update();
+            this.dino.update(dt);
             this.dino.draw();
         }
         
-        // Спавн препятствий и монет
-        this.spawnObjects();
+        // Спавн препятствий и монет (time-based)
+        this.spawnObjects(dt);
         
-        // Обновляем и рисуем объекты
-        this.updateObjects();
+        // Обновляем и рисуем объекты (с dt)
+        this.updateObjects(dt);
+        
+        // Обновляем счет (time-based)
+        this.score += dt * 10; // 10 очков в секунду
         
         // Обновляем UI
         UI.updateScore(this.score);
         
-        // Увеличиваем счет
-        this.score += 0.1;
-        if (Math.floor(this.score) % 100 === 0 && this.gameSpeed < 12) {
-            this.gameSpeed += 0.3;
+        requestAnimationFrame((time) => this.update(time));
+    },
+    
+    // Обновление стадии игры
+    updateGameStage() {
+        if (this.elapsedTime < 20) {
+            this.gameStage = 'early';
+        } else if (this.elapsedTime < 60) {
+            this.gameStage = 'mid';
+        } else {
+            this.gameStage = 'late';
         }
+    },
+    
+    // Обновление скорости
+    updateSpeed(dt) {
+        // Скорость увеличивается со временем
+        const speedIncrease = 5; // пикселей/сек за секунду
+        this.baseSpeed += speedIncrease * dt;
+        this.baseSpeed = Math.min(this.baseSpeed, 400); // Максимальная скорость
         
-        requestAnimationFrame(() => this.update());
+        // Обновляем минимальную дистанцию между препятствиями
+        this.minObstacleDistance = this.baseSpeed * 1.5; // 1.5 секунды между препятствиями
     },
     
     // Рисование фона
@@ -186,52 +240,151 @@ const Game = {
         this.ctx.fillRect(0, this.canvas.height - 20, this.canvas.width, 3);
     },
     
-    // Спавн объектов
-    spawnObjects() {
-        // Кактусы
-        if (Math.random() < this.cactusSpawnRate) {
-            this.cacti.push(new Cactus(this.canvas, this.getScale(), this.dino));
+    // Спавн объектов (time-based)
+    spawnObjects(dt) {
+        // Обновляем таймеры
+        this.coinTimer -= dt;
+        this.obstacleTimer -= dt;
+        this.mountainCooldown -= dt;
+        
+        // Спавн монет
+        if (this.coinTimer <= 0) {
+            this.spawnCoins();
+            // Интервал спавна монет зависит от стадии
+            const intervals = {
+                early: 1.5, // 1.5 сек
+                mid: 1.2,
+                late: 1.0
+            };
+            this.coinTimer = intervals[this.gameStage] + Math.random() * 0.5;
         }
         
-        // Монеты (пачками)
-        if (this.score - this.lastCoinSpawn > 50 && Math.random() < this.coinSpawnRate) {
-            this.spawnCoinGroup();
-            this.lastCoinSpawn = this.score;
-        }
-        
-        // Горы (только если maxJumps >= 2)
-        if (this.dino.maxJumps >= 2 && this.score - this.lastMountainSpawn > 200 && Math.random() < this.mountainSpawnRate) {
-            this.mountains.push(new Mountain(this.canvas, this.getScale(), this.dino));
-            this.lastMountainSpawn = this.score;
+        // Спавн препятствий
+        if (this.obstacleTimer <= 0) {
+            this.spawnObstacle();
+            // Интервал препятствий зависит от скорости
+            const minDistance = this.minObstacleDistance;
+            const interval = minDistance / this.baseSpeed;
+            this.obstacleTimer = interval + Math.random() * 0.3;
         }
     },
     
-    // Спавн группы монет
-    spawnCoinGroup() {
+    // Спавн монет (новые паттерны)
+    spawnCoins() {
         const scale = this.getScale();
         const x = this.canvas.width;
         const groundY = this.dino.groundY;
         const dinoHeight = this.dino.height * scale;
         
-        // Создаем дугу из монет
-        const coinCount = 3 + Math.floor(Math.random() * 3); // 3-5 монет
-        const spacing = 40 * scale;
-        const startY = groundY + dinoHeight - 30 * scale; // Низкая дуга
-        const peakY = startY - 60 * scale; // Высокая точка
+        // Вероятность: 70% одиночная, 25% линия из 5, 5% линия повыше
+        const rand = Math.random();
         
-        for (let i = 0; i < coinCount; i++) {
-            const progress = i / (coinCount - 1);
-            const y = startY - (Math.sin(progress * Math.PI) * (startY - peakY));
-            this.coins.push(new Coin(x + i * spacing, y, scale));
+        if (rand < 0.7) {
+            // Одиночная монета
+            this.spawnCoinSingle(x, groundY, dinoHeight, scale);
+        } else if (rand < 0.95) {
+            // Линия из 5 монет
+            this.spawnCoinLine(5, x, groundY, dinoHeight, scale, false);
+        } else {
+            // Линия повыше (требует двойного прыжка)
+            if (this.dino.maxJumps >= 2) {
+                this.spawnCoinLine(5, x, groundY, dinoHeight, scale, true);
+            } else {
+                // Если нет двойного прыжка - обычная линия
+                this.spawnCoinLine(5, x, groundY, dinoHeight, scale, false);
+            }
         }
     },
     
-    // Обновление объектов
-    updateObjects() {
+    // Спавн одной монеты
+    spawnCoinSingle(x, groundY, dinoHeight, scale) {
+        // 3 уровня высоты: земля, средняя, чуть выше
+        const levels = [
+            groundY + dinoHeight - 15 * scale, // Земля
+            groundY + dinoHeight - 50 * scale, // Средняя
+            groundY + dinoHeight - 80 * scale  // Выше
+        ];
+        const y = levels[Math.floor(Math.random() * levels.length)];
+        this.coins.push(new Coin(x, y, scale));
+    },
+    
+    // Спавн линии монет
+    spawnCoinLine(count, x, groundY, dinoHeight, scale, high = false) {
+        const spacing = 35 * scale; // Расстояние между монетами
+        let baseY;
+        
+        if (high) {
+            // Высокая линия (требует двойного прыжка)
+            baseY = groundY + dinoHeight - 100 * scale;
+        } else {
+            // Средняя линия (можно собрать одним прыжком)
+            baseY = groundY + dinoHeight - 50 * scale;
+        }
+        
+        for (let i = 0; i < count; i++) {
+            this.coins.push(new Coin(x + i * spacing, baseY, scale));
+        }
+    },
+    
+    // Спавн препятствия
+    spawnObstacle() {
+        // Проверяем минимальную дистанцию
+        const lastObstacle = this.getLastObstacleX();
+        if (lastObstacle > 0 && this.canvas.width - lastObstacle < this.minObstacleDistance) {
+            return; // Слишком близко
+        }
+        
+        // Вероятности зависят от стадии
+        const probabilities = {
+            early: { flower: 0.6, cactus: 0.4, mountain: 0 },
+            mid: { flower: 0.3, cactus: 0.6, mountain: 0.1 },
+            late: { flower: 0.2, cactus: 0.5, mountain: 0.3 }
+        };
+        
+        const probs = probabilities[this.gameStage];
+        const rand = Math.random();
+        
+        if (rand < probs.flower) {
+            // Цветочек
+            this.flowers.push(new Flower(this.canvas, this.getScale(), this.dino));
+        } else if (rand < probs.flower + probs.cactus) {
+            // Кактус
+            this.cacti.push(new Cactus(this.canvas, this.getScale(), this.dino));
+        } else if (probs.mountain > 0 && this.dino.maxJumps >= 2 && this.mountainCooldown <= 0) {
+            // Гора (только если maxJumps >= 2 и нет cooldown)
+            this.mountains.push(new Mountain(this.canvas, this.getScale(), this.dino));
+            this.mountainCooldown = 3; // 3 секунды cooldown после горы
+        }
+    },
+    
+    // Получить X последнего препятствия
+    getLastObstacleX() {
+        let maxX = -1;
+        
+        // Проверяем кактусы
+        this.cacti.forEach(c => {
+            if (c.x > maxX) maxX = c.x;
+        });
+        
+        // Проверяем цветочки
+        this.flowers.forEach(f => {
+            if (f.x > maxX) maxX = f.x;
+        });
+        
+        // Проверяем горы
+        this.mountains.forEach(m => {
+            if (m.x + m.width > maxX) maxX = m.x + m.width;
+        });
+        
+        return maxX;
+    },
+    
+    // Обновление объектов (time-based)
+    updateObjects(dt) {
         // Кактусы
         for (let i = this.cacti.length - 1; i >= 0; i--) {
             const cactus = this.cacti[i];
-            cactus.update(this.gameSpeed);
+            cactus.update(this.baseSpeed, dt);
             cactus.draw(this.ctx, this.getScale());
             
             if (cactus.collidesWith(this.dino, this.getScale())) {
@@ -244,10 +397,26 @@ const Game = {
             }
         }
         
+        // Цветочки
+        for (let i = this.flowers.length - 1; i >= 0; i--) {
+            const flower = this.flowers[i];
+            flower.update(this.baseSpeed, dt);
+            flower.draw(this.ctx, this.getScale());
+            
+            if (flower.collidesWith(this.dino, this.getScale())) {
+                this.gameOver();
+                return;
+            }
+            
+            if (flower.isOffScreen()) {
+                this.flowers.splice(i, 1);
+            }
+        }
+        
         // Монеты
         for (let i = this.coins.length - 1; i >= 0; i--) {
             const coin = this.coins[i];
-            coin.update(this.gameSpeed);
+            coin.update(this.baseSpeed, dt);
             coin.draw(this.ctx);
             
             if (coin.collidesWith(this.dino, this.getScale())) {
@@ -266,7 +435,7 @@ const Game = {
         // Горы
         for (let i = this.mountains.length - 1; i >= 0; i--) {
             const mountain = this.mountains[i];
-            mountain.update(this.gameSpeed, this.dino);
+            mountain.update(this.baseSpeed, dt, this.dino);
             mountain.draw(this.ctx, this.getScale());
             
             if (mountain.collidesWith(this.dino, this.getScale())) {
@@ -303,10 +472,10 @@ const Game = {
 function initDinoMethods(dino) {
     if (!dino) return;
     
-    dino.update = function() {
-        // Гравитация
-        this.velocityY += Game.gravity;
-        this.y += this.velocityY;
+    dino.update = function(dt) {
+        // Гравитация (time-based)
+        this.velocityY += Game.gravity * dt;
+        this.y += this.velocityY * dt;
         
         // Приземление
         if (this.y >= this.groundY) {
@@ -325,14 +494,14 @@ function initDinoMethods(dino) {
     dino.jump = function() {
         // На земле - первый прыжок
         if (Math.abs(this.y - this.groundY) < 2 && this.jumpsAvailable === this.maxJumps) {
-            this.velocityY = -15;
+            this.velocityY = -400; // Пикселей в секунду
             this.jumpsAvailable--;
             this.jumpsUsed++;
             if (this.inMountainZone) this.mountainJumps++;
         }
         // В воздухе - дополнительные прыжки
         else if (this.y < this.groundY && this.jumpsAvailable > 0) {
-            this.velocityY = -18;
+            this.velocityY = -450; // Чуть выше для двойного прыжка
             this.jumpsAvailable--;
             this.jumpsUsed++;
             if (this.inMountainZone) this.mountainJumps++;
@@ -394,8 +563,8 @@ class Cactus {
         this.y = dino.groundY + dinoScaledHeight - this.height;
     }
     
-    update(speed) {
-        this.x -= speed;
+    update(speed, dt) {
+        this.x -= speed * dt;
     }
     
     draw(ctx, scale) {
@@ -430,9 +599,9 @@ class Coin {
         this.rotation = 0;
     }
     
-    update(speed) {
-        this.x -= speed;
-        this.rotation += 0.2;
+    update(speed, dt) {
+        this.x -= speed * dt;
+        this.rotation += 3 * dt; // Радиан в секунду
     }
     
     draw(ctx) {
@@ -479,6 +648,54 @@ class Coin {
     }
 }
 
+// ===== ЦВЕТОЧЕК =====
+class Flower {
+    constructor(canvas, scale, dino) {
+        this.x = canvas.width;
+        this.width = 20 * scale; // Меньше кактуса
+        this.height = (30 + Math.random() * 15) * scale; // Меньше кактуса
+        const dinoScaledHeight = dino.height * scale;
+        this.y = dino.groundY + dinoScaledHeight - this.height;
+    }
+    
+    update(speed, dt) {
+        this.x -= speed * dt;
+    }
+    
+    draw(ctx, scale) {
+        // Стебель
+        ctx.fillStyle = '#4CAF50';
+        ctx.fillRect(this.x + this.width / 2 - 2 * scale, this.y + this.height - 10 * scale, 4 * scale, 10 * scale);
+        
+        // Лепестки (цветок)
+        ctx.fillStyle = '#FF6B9D';
+        ctx.beginPath();
+        ctx.arc(this.x + this.width / 2, this.y + this.height - 15 * scale, 8 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Центр
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(this.x + this.width / 2, this.y + this.height - 15 * scale, 4 * scale, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    isOffScreen() {
+        return this.x + this.width < 0;
+    }
+    
+    collidesWith(dino, scale) {
+        const dinoScaledWidth = dino.width * scale;
+        const dinoScaledHeight = dino.height * scale;
+        const dinoX = dino.x * scale;
+        
+        return dinoX < this.x + this.width &&
+               dinoX + dinoScaledWidth > this.x &&
+               dino.y < this.y + this.height &&
+               dino.y + dinoScaledHeight > this.y;
+    }
+}
+
 // ===== ГОРА =====
 class Mountain {
     constructor(canvas, scale, dino) {
@@ -490,8 +707,8 @@ class Mountain {
         this.requiredJumps = 2; // Требуется минимум 2 прыжка
     }
     
-    update(speed, dino) {
-        this.x -= speed;
+    update(speed, dt, dino) {
+        this.x -= speed * dt;
         
         // Проверяем, находится ли динозавр в зоне горы
         const dinoX = dino.x * Game.getScale();
