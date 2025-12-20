@@ -10,30 +10,31 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="game-container">
-        <!-- HUD во время игры -->
-        <div class="game-hud hidden" id="gameHud">
-            <div class="hud-left">
-                <div class="hud-score">
-                    <span class="hud-label">Счет</span>
-                    <span class="hud-value" id="hudScore">0</span>
+    <div class="page-bg">
+        <div class="game-frame">
+            <!-- HUD во время игры -->
+            <div class="game-hud hidden" id="gameHud">
+                <div class="hud-left">
+                    <div class="hud-score">
+                        <span class="hud-label">Счет</span>
+                        <span class="hud-value" id="hudScore">0</span>
+                    </div>
+                </div>
+                <div class="hud-right">
+                    <div class="hud-coins">
+                        <span class="coin-icon">🪙</span>
+                        <span class="hud-value" id="hudCoins">0</span>
+                    </div>
+                    <div class="hud-jump-level">
+                        <span class="jump-icon">💫</span>
+                        <span class="hud-value" id="hudJumpLevel">x1</span>
+                    </div>
                 </div>
             </div>
-            <div class="hud-right">
-                <div class="hud-coins">
-                    <span class="coin-icon">🪙</span>
-                    <span class="hud-value" id="hudCoins">0</span>
-                </div>
-                <div class="hud-jump-level">
-                    <span class="jump-icon">💫</span>
-                    <span class="hud-value" id="hudJumpLevel">x1</span>
-                </div>
-            </div>
-        </div>
 
-        <!-- Игровой canvas -->
-        <div class="game-wrapper">
-            <canvas id="gameCanvas"></canvas>
+            <!-- Игровой viewport -->
+            <div class="game-viewport">
+                <canvas id="gameCanvas"></canvas>
             
             <!-- Overlay для всех экранов -->
             <div class="game-overlay" id="gameOverlay">

@@ -15,6 +15,8 @@ const Game = {
     
     // Debug флаг (можно включить для проверки)
     debug: false,
+    // Флаг для отладки хитбоксов
+    DEBUG_HITBOX: false,
     
     // Time-based переменные
     lastTime: 0,
@@ -84,11 +86,15 @@ const Game = {
     // Изменить размер canvas
     resizeCanvas() {
         if (!this.canvas) return;
-        const container = this.canvas.parentElement;
+        // Используем game-viewport контейнер
+        const viewport = document.querySelector('.game-viewport');
+        const container = viewport || this.canvas.parentElement;
         if (!container) return;
         
-        const width = container.clientWidth || window.innerWidth;
-        const height = container.clientHeight || window.innerHeight;
+        // Получаем размеры контейнера
+        const rect = container.getBoundingClientRect();
+        const width = rect.width || container.clientWidth || 800;
+        const height = rect.height || container.clientHeight || 400;
         
         if (width > 0 && height > 0) {
             this.canvas.width = width;
@@ -196,6 +202,11 @@ const Game = {
         if (this.dino && this.dino.update) {
             this.dino.update(dt);
             this.dino.draw();
+            
+            // Debug: рисуем хитбокс динозавра
+            if (this.DEBUG_HITBOX) {
+                this.drawDinoHitbox();
+            }
         }
         
         // Спавн препятствий и монет (time-based)
@@ -460,6 +471,11 @@ const Game = {
             mountain.update(this.BASE_SPEED, dt, this.dino);
             mountain.draw(this.ctx, this.getScale());
             
+            // Debug: рисуем хитбокс
+            if (this.DEBUG_HITBOX) {
+                this.drawHitbox(mountain, this.getScale());
+            }
+            
             if (mountain.collidesWith(this.dino, this.getScale())) {
                 this.gameOver();
                 return;
@@ -476,6 +492,11 @@ const Game = {
             building.update(this.BASE_SPEED, dt, this.dino);
             building.draw(this.ctx, this.getScale());
             
+            // Debug: рисуем хитбокс
+            if (this.DEBUG_HITBOX) {
+                this.drawHitbox(building, this.getScale());
+            }
+            
             if (building.collidesWith(this.dino, this.getScale())) {
                 this.gameOver();
                 return;
@@ -485,6 +506,34 @@ const Game = {
                 this.buildings.splice(i, 1);
             }
         }
+    },
+    
+    // Рисование хитбокса для отладки
+    drawHitbox(obstacle, scale) {
+        const ctx = this.ctx;
+        ctx.strokeStyle = '#FF0000';
+        ctx.lineWidth = 2;
+        
+        // Хитбокс препятствия
+        if (obstacle.x !== undefined && obstacle.y !== undefined && 
+            obstacle.width !== undefined && obstacle.height !== undefined) {
+            ctx.strokeRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+        }
+    },
+    
+    // Рисование хитбокса динозавра для отладки
+    drawDinoHitbox() {
+        if (!this.dino) return;
+        const ctx = this.ctx;
+        const scale = this.getScale();
+        const dinoX = this.dino.x * scale;
+        const dinoY = this.dino.y;
+        const dinoWidth = this.dino.width * scale;
+        const dinoHeight = this.dino.height * scale;
+        
+        ctx.strokeStyle = '#00FF00';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(dinoX, dinoY, dinoWidth, dinoHeight);
     },
     
     // Конец игры
@@ -766,14 +815,17 @@ class Mountain {
         
         // Проверяем, находится ли динозавр в зоне горы
         const dinoX = dino.x * Game.getScale();
-        if (dinoX >= this.x && dinoX <= this.x + this.width) {
-            dino.inMountainZone = true;
-        } else if (dinoX > this.x + this.width) {
-            // Прошли гору - проверяем, сделал ли достаточно прыжков
-            if (dino.inMountainZone && dino.mountainJumps < this.requiredJumps) {
-                // Недостаточно прыжков - столкновение
-                Game.gameOver();
+        const dinoWidth = dino.width * Game.getScale();
+        const dinoRight = dinoX + dinoWidth;
+        
+        // Динозавр входит в зону горы
+        if (dinoRight >= this.x && dinoX <= this.x + this.width) {
+            if (!dino.inMountainZone) {
+                // Только что вошли в зону - начинаем отслеживание
+                dino.inMountainZone = true;
             }
+        } else if (dinoX > this.x + this.width) {
+            // Полностью прошли гору - сбрасываем зону
             dino.inMountainZone = false;
             dino.mountainJumps = 0;
         }
@@ -809,16 +861,25 @@ class Mountain {
         const dinoWidth = dino.width * scale;
         const dinoHeight = dino.height * scale;
         
-        // Проверка столкновения с горой
-        if (dinoX < this.x + this.width &&
-            dinoX + dinoWidth > this.x &&
-            dinoY < this.y + this.height &&
-            dinoY + dinoHeight > this.y) {
-            
-            // Если в зоне горы и недостаточно прыжков
+        // Хитбокс горы - прямоугольник по основанию и высоте
+        const hitboxX = this.x;
+        const hitboxY = this.y;
+        const hitboxWidth = this.width;
+        const hitboxHeight = this.height;
+        
+        // Проверка пересечения хитбоксов
+        const isOverlapping = dinoX < hitboxX + hitboxWidth &&
+            dinoX + dinoWidth > hitboxX &&
+            dinoY < hitboxY + hitboxHeight &&
+            dinoY + dinoHeight > hitboxY;
+        
+        if (isOverlapping) {
+            // Если в зоне горы и недостаточно прыжков - столкновение
             if (dino.inMountainZone && dino.mountainJumps < this.requiredJumps) {
                 return true;
             }
+            // Если достаточно прыжков или не в зоне - нет столкновения
+            return false;
         }
         
         return false;
@@ -841,14 +902,17 @@ class Building {
         
         // Проверяем, находится ли динозавр в зоне здания
         const dinoX = dino.x * Game.getScale();
-        if (dinoX >= this.x && dinoX <= this.x + this.width) {
-            dino.inBuildingZone = true;
-        } else if (dinoX > this.x + this.width) {
-            // Прошли здание - проверяем, сделал ли достаточно прыжков
-            if (dino.inBuildingZone && dino.buildingJumps < this.requiredJumps) {
-                // Недостаточно прыжков - столкновение
-                Game.gameOver();
+        const dinoWidth = dino.width * Game.getScale();
+        const dinoRight = dinoX + dinoWidth;
+        
+        // Динозавр входит в зону здания
+        if (dinoRight >= this.x && dinoX <= this.x + this.width) {
+            if (!dino.inBuildingZone) {
+                // Только что вошли в зону - начинаем отслеживание
+                dino.inBuildingZone = true;
             }
+        } else if (dinoX > this.x + this.width) {
+            // Полностью прошли здание - сбрасываем зону
             dino.inBuildingZone = false;
             dino.buildingJumps = 0;
         }
@@ -898,16 +962,25 @@ class Building {
         const dinoWidth = dino.width * scale;
         const dinoHeight = dino.height * scale;
         
-        // Проверка столкновения со зданием
-        if (dinoX < this.x + this.width &&
-            dinoX + dinoWidth > this.x &&
-            dinoY < this.y + this.height &&
-            dinoY + dinoHeight > this.y) {
-            
-            // Если в зоне здания и недостаточно прыжков
+        // Хитбокс здания - прямоугольник по основанию и высоте (без крыши)
+        const hitboxX = this.x;
+        const hitboxY = this.y;
+        const hitboxWidth = this.width;
+        const hitboxHeight = this.height; // Включая основание
+        
+        // Проверка пересечения хитбоксов
+        const isOverlapping = dinoX < hitboxX + hitboxWidth &&
+            dinoX + dinoWidth > hitboxX &&
+            dinoY < hitboxY + hitboxHeight &&
+            dinoY + dinoHeight > hitboxY;
+        
+        if (isOverlapping) {
+            // Если в зоне здания и недостаточно прыжков - столкновение
             if (dino.inBuildingZone && dino.buildingJumps < this.requiredJumps) {
                 return true;
             }
+            // Если достаточно прыжков или не в зоне - нет столкновения
+            return false;
         }
         
         return false;

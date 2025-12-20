@@ -31,25 +31,46 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* ===== Контейнер игры ===== */
-.game-container {
+/* ===== Фон страницы ===== */
+.page-bg {
     width: 100%;
-    height: 100vh;
+    min-height: 100vh;
+    min-height: 100dvh;
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
     background: linear-gradient(180deg, #87CEEB 0%, #E0F6FF 50%, #F5F5F5 100%);
+    padding: 20px;
+    box-sizing: border-box;
 }
 
-.game-wrapper {
+/* ===== Фрейм игры ===== */
+.game-frame {
+    position: relative;
+    width: 100%;
+    max-width: 1100px;
+    max-height: 90vh;
+    max-height: 90dvh;
+    background: white;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ===== Viewport для canvas ===== */
+.game-viewport {
     position: relative;
     width: 100%;
     height: 100%;
+    flex: 1;
+    min-height: 400px;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
-    padding-top: 10vh; /* Игровое поле выше начала экрана на мобилке */
+    overflow: hidden;
 }
 
 #gameCanvas {
@@ -59,7 +80,7 @@ body {
     width: 100%;
     height: 100%;
     touch-action: none;
-    object-fit: contain; /* Не растягивается */
+    object-fit: contain;
 }
 
 /* ===== HUD (во время игры) ===== */
@@ -124,8 +145,9 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(4px);
+    border-radius: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -446,28 +468,28 @@ body {
 
 /* ===== Адаптивность ===== */
 @media (max-width: 768px) {
-    .game-wrapper {
-        /* Игровое поле выше начала экрана на мобилке */
-        display: flex;
-        align-items: flex-start;
-        justify-content: center;
-        padding-top: max(10vh, 60px);
-        padding-top: max(10vh, env(safe-area-inset-top, 60px));
-        height: auto;
-        min-height: 100vh;
+    .page-bg {
+        padding: 10px;
+        padding-top: max(10px, env(safe-area-inset-top, 10px));
+        min-height: 100svh;
+    }
+    
+    .game-frame {
+        width: 96%;
+        max-width: none;
+        max-height: 80svh;
+        border-radius: 16px;
+    }
+    
+    .game-viewport {
+        min-height: 300px;
+        height: 70svh;
+        max-height: 600px;
     }
     
     #gameCanvas {
-        /* Canvas не растягивается на весь экран */
         width: 100%;
-        height: 60vh; /* Фиксированная высота относительно экрана */
-        max-height: 500px;
-        object-fit: contain;
-    }
-    
-    .game-container {
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
+        height: 100%;
     }
 }
 
