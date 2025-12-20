@@ -26,6 +26,7 @@ const Game = {
     flowers: [],
     coins: [],
     mountains: [],
+    buildings: [],
     
     // Спавн-таймеры (в секундах)
     coinTimer: 0,
@@ -67,7 +68,9 @@ const Game = {
             jumpsUsed: 0,
             hasMask: Storage.hasMask(),
             inMountainZone: false,
-            mountainJumps: 0
+            mountainJumps: 0,
+            inBuildingZone: false,
+            buildingJumps: 0
         };
         initDinoMethods(this.dino);
     },
@@ -122,9 +125,11 @@ const Game = {
         this.flowers = [];
         this.coins = [];
         this.mountains = [];
+        this.buildings = [];
         this.coinTimer = 0;
         this.obstacleTimer = 0;
         this.mountainCooldown = 0;
+        this.buildingCooldown = 0;
         // Минимальная дистанция между препятствиями (постоянная)
         this.minObstacleDistance = this.BASE_SPEED * 1.5; // 1.5 секунды между препятствиями
         
@@ -251,6 +256,7 @@ const Game = {
         this.coinTimer -= dt;
         this.obstacleTimer -= dt;
         this.mountainCooldown -= dt;
+        this.buildingCooldown -= dt;
         
         // Спавн монет
         if (this.coinTimer <= 0) {
@@ -341,9 +347,9 @@ const Game = {
         
         // Вероятности зависят от стадии
         const probabilities = {
-            early: { flower: 0.6, cactus: 0.4, mountain: 0 },
-            mid: { flower: 0.3, cactus: 0.6, mountain: 0.1 },
-            late: { flower: 0.2, cactus: 0.5, mountain: 0.3 }
+            early: { flower: 0.6, cactus: 0.4, mountain: 0, building: 0 },
+            mid: { flower: 0.3, cactus: 0.5, mountain: 0.1, building: 0.1 },
+            late: { flower: 0.15, cactus: 0.4, mountain: 0.25, building: 0.2 }
         };
         
         const probs = probabilities[this.gameStage];
@@ -355,10 +361,16 @@ const Game = {
         } else if (rand < probs.flower + probs.cactus) {
             // Кактус
             this.cacti.push(new Cactus(this.canvas, this.getScale(), this.dino));
-        } else if (probs.mountain > 0 && this.dino.maxJumps >= 2 && this.mountainCooldown <= 0) {
+        } else if (rand < probs.flower + probs.cactus + probs.mountain) {
             // Гора (только если maxJumps >= 2 и нет cooldown)
-            this.mountains.push(new Mountain(this.canvas, this.getScale(), this.dino));
-            this.mountainCooldown = 3; // 3 секунды cooldown после горы
+            if (this.dino.maxJumps >= 2 && this.mountainCooldown <= 0) {
+                this.mountains.push(new Mountain(this.canvas, this.getScale(), this.dino));
+                this.mountainCooldown = 3; // 3 секунды cooldown после горы
+            }
+        } else if (probs.building > 0 && this.dino.maxJumps >= 3 && this.buildingCooldown <= 0) {
+            // Здание (только если maxJumps >= 3 и нет cooldown)
+            this.buildings.push(new Building(this.canvas, this.getScale(), this.dino));
+            this.buildingCooldown = 5; // 5 секунд cooldown после здания
         }
     },
     
@@ -379,6 +391,11 @@ const Game = {
         // Проверяем горы
         this.mountains.forEach(m => {
             if (m.x + m.width > maxX) maxX = m.x + m.width;
+        });
+        
+        // Проверяем здания
+        this.buildings.forEach(b => {
+            if (b.x + b.width > maxX) maxX = b.x + b.width;
         });
         
         return maxX;
@@ -452,6 +469,22 @@ const Game = {
                 this.mountains.splice(i, 1);
             }
         }
+        
+        // Здания
+        for (let i = this.buildings.length - 1; i >= 0; i--) {
+            const building = this.buildings[i];
+            building.update(this.BASE_SPEED, dt, this.dino);
+            building.draw(this.ctx, this.getScale());
+            
+            if (building.collidesWith(this.dino, this.getScale())) {
+                this.gameOver();
+                return;
+            }
+            
+            if (building.isOffScreen()) {
+                this.buildings.splice(i, 1);
+            }
+        }
     },
     
     // Конец игры
@@ -491,6 +524,8 @@ function initDinoMethods(dino) {
             this.jumpsUsed = 0;
             this.inMountainZone = false;
             this.mountainJumps = 0;
+            this.inBuildingZone = false;
+            this.buildingJumps = 0;
         } else {
             this.jumping = true;
         }
@@ -504,6 +539,7 @@ function initDinoMethods(dino) {
             this.jumpsAvailable--;
             this.jumpsUsed++;
             if (this.inMountainZone) this.mountainJumps++;
+            if (this.inBuildingZone) this.buildingJumps++;
         }
         // В воздухе - дополнительные прыжки
         // Старая скорость: -18 px/frame → -18 * 60 = -1080 px/sec
@@ -512,6 +548,7 @@ function initDinoMethods(dino) {
             this.jumpsAvailable--;
             this.jumpsUsed++;
             if (this.inMountainZone) this.mountainJumps++;
+            if (this.inBuildingZone) this.buildingJumps++;
         }
     };
     
@@ -780,6 +817,95 @@ class Mountain {
             
             // Если в зоне горы и недостаточно прыжков
             if (dino.inMountainZone && dino.mountainJumps < this.requiredJumps) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+}
+
+// ===== ЗДАНИЕ =====
+class Building {
+    constructor(canvas, scale, dino) {
+        this.x = canvas.width;
+        this.width = 150 * scale; // Широкое здание
+        this.height = 100 * scale; // Высокое здание
+        const dinoScaledHeight = dino.height * scale;
+        this.y = dino.groundY + dinoScaledHeight - this.height;
+        this.requiredJumps = 3; // Требуется минимум 3 прыжка
+    }
+    
+    update(speed, dt, dino) {
+        this.x -= speed * dt;
+        
+        // Проверяем, находится ли динозавр в зоне здания
+        const dinoX = dino.x * Game.getScale();
+        if (dinoX >= this.x && dinoX <= this.x + this.width) {
+            dino.inBuildingZone = true;
+        } else if (dinoX > this.x + this.width) {
+            // Прошли здание - проверяем, сделал ли достаточно прыжков
+            if (dino.inBuildingZone && dino.buildingJumps < this.requiredJumps) {
+                // Недостаточно прыжков - столкновение
+                Game.gameOver();
+            }
+            dino.inBuildingZone = false;
+            dino.buildingJumps = 0;
+        }
+    }
+    
+    draw(ctx, scale) {
+        // Основание здания (серый)
+        ctx.fillStyle = '#708090';
+        ctx.fillRect(this.x, this.y + this.height - 20 * scale, this.width, 20 * scale);
+        
+        // Основная часть здания (темно-серый)
+        ctx.fillStyle = '#556B2F';
+        ctx.fillRect(this.x, this.y, this.width, this.height - 20 * scale);
+        
+        // Окна (желтые квадратики)
+        ctx.fillStyle = '#FFD700';
+        const windowSize = 8 * scale;
+        const windowSpacing = 20 * scale;
+        const windowsPerRow = Math.floor((this.width - windowSpacing) / (windowSize + windowSpacing));
+        const rows = Math.floor((this.height - 20 * scale - windowSpacing) / (windowSize + windowSpacing));
+        
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < windowsPerRow; col++) {
+                const windowX = this.x + windowSpacing + col * (windowSize + windowSpacing);
+                const windowY = this.y + windowSpacing + row * (windowSize + windowSpacing);
+                ctx.fillRect(windowX, windowY, windowSize, windowSize);
+            }
+        }
+        
+        // Крыша (коричневая)
+        ctx.fillStyle = '#8B4513';
+        ctx.beginPath();
+        ctx.moveTo(this.x - 5 * scale, this.y);
+        ctx.lineTo(this.x + this.width / 2, this.y - 15 * scale);
+        ctx.lineTo(this.x + this.width + 5 * scale, this.y);
+        ctx.closePath();
+        ctx.fill();
+    }
+    
+    isOffScreen() {
+        return this.x + this.width < 0;
+    }
+    
+    collidesWith(dino, scale) {
+        const dinoX = dino.x * scale;
+        const dinoY = dino.y;
+        const dinoWidth = dino.width * scale;
+        const dinoHeight = dino.height * scale;
+        
+        // Проверка столкновения со зданием
+        if (dinoX < this.x + this.width &&
+            dinoX + dinoWidth > this.x &&
+            dinoY < this.y + this.height &&
+            dinoY + dinoHeight > this.y) {
+            
+            // Если в зоне здания и недостаточно прыжков
+            if (dino.inBuildingZone && dino.buildingJumps < this.requiredJumps) {
                 return true;
             }
         }
