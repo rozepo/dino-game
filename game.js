@@ -8,9 +8,14 @@ const Game = {
     gameRunning: false,
     score: 0,
     coinsEarned: 0,
-    gameSpeed: 5, // Базовая скорость (пикселей в секунду)
-    gravity: 600, // Гравитация (пикселей в секунду²)
-    baseSpeed: 200, // Базовая скорость в пикселях/сек
+    // Конвертация из px/frame в px/sec (при 60 FPS)
+    // Старая скорость: 5 px/frame → 5 * 60 = 300 px/sec
+    baseSpeed: 300, // Базовая скорость в пикселях/сек
+    // Старая гравитация: 0.6 px/frame → 0.6 * 60 * 60 = 2160 px/sec²
+    gravity: 2160, // Гравитация (пикселей в секунду²)
+    
+    // Debug флаг (можно включить для проверки)
+    debug: false,
     
     // Time-based переменные
     lastTime: 0,
@@ -110,7 +115,7 @@ const Game = {
         // Сброс игры
         this.score = 0;
         this.coinsEarned = 0;
-        this.baseSpeed = 200;
+        this.baseSpeed = 300; // Начальная скорость: 5 px/frame * 60 = 300 px/sec
         this.elapsedTime = 0;
         this.lastTime = performance.now();
         this.gameStage = 'early';
@@ -157,11 +162,16 @@ const Game = {
             this.lastTime = currentTime;
         }
         
-        let dt = (currentTime - this.lastTime) / 1000; // В секундах
+        let dt = (currentTime - this.lastTime) / 1000; // В секундах (правильно: делим на 1000)
         this.lastTime = currentTime;
         
         // Ограничиваем максимальный dt (защита от телепортов)
         dt = Math.min(dt, 0.1);
+        
+        // Debug: логируем dt и скорость (можно включить через Game.debug = true)
+        if (this.debug && Math.floor(this.elapsedTime * 10) % 10 === 0) {
+            console.log(`[DEBUG] dt: ${dt.toFixed(4)}s (${(1/dt).toFixed(1)} FPS), speed: ${this.baseSpeed.toFixed(1)}px/s, elapsed: ${this.elapsedTime.toFixed(1)}s`);
+        }
         
         // Обновляем время игры
         this.elapsedTime += dt;
@@ -191,7 +201,14 @@ const Game = {
         this.updateObjects(dt);
         
         // Обновляем счет (time-based)
+        // Старое: score += 0.1 за кадр → на 60 FPS = 6 очков/сек
+        // Но для более плавного увеличения используем 10 очков/сек
         this.score += dt * 10; // 10 очков в секунду
+        
+        // Debug логирование
+        if (this.debug && Math.floor(this.score) % 100 === 0) {
+            console.log(`dt: ${dt.toFixed(4)}s, speed: ${this.baseSpeed.toFixed(1)}px/s, score: ${Math.floor(this.score)}`);
+        }
         
         // Обновляем UI
         UI.updateScore(this.score);
@@ -213,9 +230,14 @@ const Game = {
     // Обновление скорости
     updateSpeed(dt) {
         // Скорость увеличивается со временем
-        const speedIncrease = 5; // пикселей/сек за секунду
+        // Старое увеличение: 0.3 px/frame за 100 очков
+        // На 60 FPS: 0.3 * 60 = 18 px/sec за 100 очков
+        // За секунду набирается ~10 очков, так что ~1.8 px/sec за секунду
+        // Но для более плавного увеличения используем 3 px/sec за секунду
+        const speedIncrease = 3; // пикселей/сек за секунду
         this.baseSpeed += speedIncrease * dt;
-        this.baseSpeed = Math.min(this.baseSpeed, 400); // Максимальная скорость
+        // Максимальная скорость: старая была ~12 px/frame → 12 * 60 = 720 px/sec
+        this.baseSpeed = Math.min(this.baseSpeed, 720); // Максимальная скорость
         
         // Обновляем минимальную дистанцию между препятствиями
         this.minObstacleDistance = this.baseSpeed * 1.5; // 1.5 секунды между препятствиями
@@ -493,15 +515,17 @@ function initDinoMethods(dino) {
     
     dino.jump = function() {
         // На земле - первый прыжок
+        // Старая скорость: -15 px/frame → -15 * 60 = -900 px/sec
         if (Math.abs(this.y - this.groundY) < 2 && this.jumpsAvailable === this.maxJumps) {
-            this.velocityY = -400; // Пикселей в секунду
+            this.velocityY = -900; // Пикселей в секунду
             this.jumpsAvailable--;
             this.jumpsUsed++;
             if (this.inMountainZone) this.mountainJumps++;
         }
         // В воздухе - дополнительные прыжки
+        // Старая скорость: -18 px/frame → -18 * 60 = -1080 px/sec
         else if (this.y < this.groundY && this.jumpsAvailable > 0) {
-            this.velocityY = -450; // Чуть выше для двойного прыжка
+            this.velocityY = -1080; // Чуть выше для двойного прыжка
             this.jumpsAvailable--;
             this.jumpsUsed++;
             if (this.inMountainZone) this.mountainJumps++;
