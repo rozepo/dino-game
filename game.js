@@ -341,26 +341,34 @@ document.addEventListener('keydown', (e) => {
 let touchStartY = 0;
 let touchStartTime = 0;
 
-canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    touchStartY = e.touches[0].clientY;
-    touchStartTime = Date.now();
-    if (gameRunning) {
-        dino.jump();
-    } else if (gameOverlay.classList.contains('hidden')) {
-        startGame();
+// Функция для привязки обработчиков canvas
+function attachCanvasHandlers() {
+    if (!canvas) {
+        console.error('Canvas не найден для привязки обработчиков');
+        return;
     }
-});
+    
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        touchStartY = e.touches[0].clientY;
+        touchStartTime = Date.now();
+        if (gameRunning) {
+            dino.jump();
+        } else if (gameOverlay && gameOverlay.classList.contains('hidden')) {
+            startGame();
+        }
+    });
 
-canvas.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    // Можно добавить логику для свайпа вверх
-});
+    canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        // Можно добавить логику для свайпа вверх
+    });
 
-// Предотвращаем скролл при касании canvas
-canvas.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-}, { passive: false });
+    // Предотвращаем скролл при касании canvas
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+    }, { passive: false });
+}
 
 // Функция для привязки обработчиков кнопок
 function attachButtonHandlers() {
@@ -408,6 +416,7 @@ window.addEventListener('load', () => {
         return;
     }
     attachButtonHandlers();
+    attachCanvasHandlers();
     resizeCanvas();
     init();
     
