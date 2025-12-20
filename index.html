@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Динозавр - Игра</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-wrapper">
+            <canvas id="gameCanvas" width="800" height="200"></canvas>
+            <div class="game-overlay" id="gameOverlay">
+                <div class="start-screen" id="startScreen">
+                    <h1>🦕 Динозавр</h1>
+                    <p>Нажми ПРОБЕЛ или стрелку ВВЕРХ, чтобы прыгать</p>
+                    <p>Избегай кактусов!</p>
+                    <button id="startBtn">Начать игру</button>
+                </div>
+                <div class="game-over-screen hidden" id="gameOverScreen">
+                    <h2>Игра окончена!</h2>
+                    <p>Счет: <span id="finalScore">0</span></p>
+                    <button id="restartBtn">Играть снова</button>
+                </div>
+            </div>
+            <div class="score">Счет: <span id="score">0</span></div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
+
