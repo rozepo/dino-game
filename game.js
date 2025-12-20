@@ -63,6 +63,14 @@ const dino = {
         ctx.fillRect(scaledX, scaledY, scaledWidth, scaledHeight);
         // Голова
         ctx.fillRect(scaledX + scaledWidth * 0.75, scaledY - scaledHeight * 0.2, scaledWidth * 0.375, scaledHeight * 0.3);
+        // Рог
+        ctx.fillStyle = '#ff6b35';
+        ctx.beginPath();
+        ctx.moveTo(scaledX + scaledWidth * 0.9, scaledY - scaledHeight * 0.2);
+        ctx.lineTo(scaledX + scaledWidth * 0.95, scaledY - scaledHeight * 0.4);
+        ctx.lineTo(scaledX + scaledWidth * 0.85, scaledY - scaledHeight * 0.35);
+        ctx.closePath();
+        ctx.fill();
         // Глаз
         ctx.fillStyle = 'white';
         ctx.fillRect(scaledX + scaledWidth * 0.875, scaledY - scaledHeight * 0.16, scaledWidth * 0.125, scaledHeight * 0.1);
