@@ -11,16 +11,22 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    padding: 20px;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
 }
 
 .game-container {
     background: white;
-    border-radius: 20px;
-    padding: 30px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    max-width: 900px;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+    max-width: none;
     width: 100%;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .game-wrapper {
@@ -29,15 +35,18 @@ body {
     justify-content: center;
     align-items: center;
     flex-direction: column;
+    width: 100%;
+    height: 100vh;
 }
 
 #gameCanvas {
-    border: 2px solid #e0e0e0;
-    border-radius: 10px;
+    border: none;
+    border-radius: 0;
     background: #f7f7f7;
     display: block;
-    max-width: 100%;
-    height: auto;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
 }
 
 .game-overlay {
@@ -139,22 +148,56 @@ button:active {
     color: #667eea;
 }
 
-@media (max-width: 900px) {
-    #gameCanvas {
-        width: 100%;
+/* Десктоп версия */
+@media (min-width: 901px) {
+    body {
+        padding: 20px;
     }
     
     .game-container {
-        padding: 15px;
+        border-radius: 20px;
+        padding: 30px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        max-width: 1200px;
+        height: auto;
+        min-height: 600px;
     }
     
+    .game-wrapper {
+        height: 600px;
+    }
+    
+    #gameCanvas {
+        border-radius: 10px;
+        border: 2px solid #e0e0e0;
+    }
+}
+
+@media (max-width: 900px) {
     .start-screen,
     .game-over-screen {
         padding: 30px 20px;
+        max-width: 90%;
     }
     
     .start-screen h1 {
         font-size: 36px;
+    }
+    
+    .start-screen p {
+        font-size: 14px;
+    }
+    
+    button {
+        padding: 12px 30px;
+        font-size: 16px;
+    }
+    
+    .score {
+        font-size: 20px;
+        padding: 8px 16px;
+        top: 10px;
+        right: 10px;
     }
 }
 

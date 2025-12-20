@@ -9,6 +9,30 @@ const restartBtn = document.getElementById('restartBtn');
 const scoreElement = document.getElementById('score');
 const finalScoreElement = document.getElementById('finalScore');
 
+// Функция для получения масштаба
+function getScale() {
+    return Math.min(canvas.width / 800, canvas.height / 400, 1.5);
+}
+
+// Настройка размера canvas
+function resizeCanvas() {
+    const container = canvas.parentElement;
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+    // Пересчитываем позиции после изменения размера
+    if (dino.groundY > 0) {
+        dino.groundY = canvas.height - dino.height * getScale() - 20;
+        dino.y = Math.min(dino.y, dino.groundY);
+    }
+}
+
+// Инициализация размера canvas
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', () => {
+    setTimeout(resizeCanvas, 100);
+});
+
 // Игровые переменные
 let gameRunning = false;
 let score = 0;
@@ -24,20 +48,28 @@ const dino = {
     velocityY: 0,
     jumping: false,
     groundY: 0,
+    jumpsAvailable: 2, // Двойной прыжок
+    hasDoubleJumped: false,
     
     draw() {
+        const scale = getScale();
+        const scaledWidth = this.width * scale;
+        const scaledHeight = this.height * scale;
+        const scaledX = this.x * scale;
+        const scaledY = this.y;
+        
         ctx.fillStyle = '#333';
         // Тело динозавра
-        ctx.fillRect(this.x, this.y, this.width, this.height);
+        ctx.fillRect(scaledX, scaledY, scaledWidth, scaledHeight);
         // Голова
-        ctx.fillRect(this.x + 30, this.y - 10, 15, 15);
+        ctx.fillRect(scaledX + scaledWidth * 0.75, scaledY - scaledHeight * 0.2, scaledWidth * 0.375, scaledHeight * 0.3);
         // Глаз
         ctx.fillStyle = 'white';
-        ctx.fillRect(this.x + 35, this.y - 8, 5, 5);
+        ctx.fillRect(scaledX + scaledWidth * 0.875, scaledY - scaledHeight * 0.16, scaledWidth * 0.125, scaledHeight * 0.1);
         // Ноги
         ctx.fillStyle = '#333';
-        ctx.fillRect(this.x + 5, this.y + this.height, 8, 10);
-        ctx.fillRect(this.x + 25, this.y + this.height, 8, 10);
+        ctx.fillRect(scaledX + scaledWidth * 0.125, scaledY + scaledHeight, scaledWidth * 0.2, scaledHeight * 0.2);
+        ctx.fillRect(scaledX + scaledWidth * 0.625, scaledY + scaledHeight, scaledWidth * 0.2, scaledHeight * 0.2);
     },
     
     update() {
@@ -50,13 +82,25 @@ const dino = {
             this.y = this.groundY;
             this.velocityY = 0;
             this.jumping = false;
+            this.jumpsAvailable = 2; // Восстанавливаем двойной прыжок при приземлении
+            this.hasDoubleJumped = false;
+        } else {
+            this.jumping = true;
         }
     },
     
     jump() {
-        if (!this.jumping) {
+        // Если на земле - первый прыжок
+        if (Math.abs(this.y - this.groundY) < 2 && this.jumpsAvailable === 2) {
             this.velocityY = -15;
             this.jumping = true;
+            this.jumpsAvailable = 1; // Остался один прыжок
+        }
+        // Если в воздухе и есть доступный прыжок - двойной прыжок (выше)
+        else if (this.y < this.groundY && this.jumpsAvailable === 1 && !this.hasDoubleJumped) {
+            this.velocityY = -18; // Выше чем первый прыжок
+            this.jumpsAvailable = 0;
+            this.hasDoubleJumped = true;
         }
     },
     
@@ -64,6 +108,8 @@ const dino = {
         this.y = this.groundY;
         this.velocityY = 0;
         this.jumping = false;
+        this.jumpsAvailable = 2;
+        this.hasDoubleJumped = false;
     }
 };
 
@@ -74,18 +120,21 @@ const cactusSpawnRate = 0.01;
 class Cactus {
     constructor() {
         this.x = canvas.width;
-        this.width = 30;
-        this.height = 50 + Math.random() * 20;
-        this.y = dino.groundY + dino.height - this.height;
+        const scale = getScale();
+        this.width = 30 * scale;
+        this.height = (50 + Math.random() * 20) * scale;
+        const dinoScaledHeight = dino.height * scale;
+        this.y = dino.groundY + dinoScaledHeight - this.height;
     }
     
     draw() {
+        const scale = getScale();
         ctx.fillStyle = '#2ecc71';
         // Основной ствол
         ctx.fillRect(this.x, this.y, this.width, this.height);
         // Ветки
-        ctx.fillRect(this.x - 5, this.y + 10, 10, 8);
-        ctx.fillRect(this.x + this.width - 5, this.y + 20, 10, 8);
+        ctx.fillRect(this.x - 5 * scale, this.y + 10 * scale, 10 * scale, 8 * scale);
+        ctx.fillRect(this.x + this.width - 5 * scale, this.y + 20 * scale, 10 * scale, 8 * scale);
     }
     
     update() {
@@ -97,17 +146,24 @@ class Cactus {
     }
     
     collidesWith(dino) {
-        return dino.x < this.x + this.width &&
-               dino.x + dino.width > this.x &&
+        const scale = getScale();
+        const dinoScaledWidth = dino.width * scale;
+        const dinoScaledHeight = dino.height * scale;
+        const dinoX = dino.x * scale;
+        
+        return dinoX < this.x + this.width &&
+               dinoX + dinoScaledWidth > this.x &&
                dino.y < this.y + this.height &&
-               dino.y + dino.height > this.y;
+               dino.y + dinoScaledHeight > this.y;
     }
 }
 
 // Инициализация
 function init() {
-    dino.groundY = canvas.height - dino.height - 20;
+    const scale = getScale();
+    dino.groundY = canvas.height - (dino.height * scale) - 20;
     dino.y = dino.groundY;
+    dino.reset();
     cacti.length = 0;
     score = 0;
     gameSpeed = 5;
@@ -188,7 +244,7 @@ function restartGame() {
     startGame();
 }
 
-// Управление
+// Управление клавиатурой
 document.addEventListener('keydown', (e) => {
     if (e.code === 'Space' || e.key === 'ArrowUp') {
         e.preventDefault();
@@ -200,10 +256,45 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// Управление касанием (для мобильных)
+let touchStartY = 0;
+let touchStartTime = 0;
+
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    touchStartY = e.touches[0].clientY;
+    touchStartTime = Date.now();
+    if (gameRunning) {
+        dino.jump();
+    } else if (gameOverlay.classList.contains('hidden')) {
+        startGame();
+    }
+});
+
+canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    // Можно добавить логику для свайпа вверх
+});
+
+// Предотвращаем скролл при касании canvas
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+}, { passive: false });
+
 // Кнопки
 startBtn.addEventListener('click', startGame);
 restartBtn.addEventListener('click', restartGame);
 
+// Предотвращаем стандартное поведение при свайпе вниз (чтобы не закрывалась страница)
+document.addEventListener('touchmove', (e) => {
+    if (gameRunning) {
+        e.preventDefault();
+    }
+}, { passive: false });
+
 // Инициализация при загрузке
-init();
+window.addEventListener('load', () => {
+    resizeCanvas();
+    init();
+});
 

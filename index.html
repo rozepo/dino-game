@@ -2,18 +2,22 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Динозавр - Игра</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="game-container">
         <div class="game-wrapper">
-            <canvas id="gameCanvas" width="800" height="200"></canvas>
+            <canvas id="gameCanvas"></canvas>
             <div class="game-overlay" id="gameOverlay">
                 <div class="start-screen" id="startScreen">
                     <h1>🦕 Динозавр</h1>
                     <p>Нажми ПРОБЕЛ или стрелку ВВЕРХ, чтобы прыгать</p>
+                    <p>💫 Двойной прыжок: нажми дважды для высокого прыжка!</p>
                     <p>Избегай кактусов!</p>
                     <button id="startBtn">Начать игру</button>
                 </div>
