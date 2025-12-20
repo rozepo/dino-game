@@ -8,10 +8,9 @@ const Game = {
     gameRunning: false,
     score: 0,
     coinsEarned: 0,
-    // Конвертация из px/frame в px/sec (при 60 FPS)
-    // Старая скорость: 5 px/frame → 5 * 60 = 300 px/sec
-    baseSpeed: 300, // Базовая скорость в пикселях/сек
-    // Старая гравитация: 0.6 px/frame → 0.6 * 60 * 60 = 2160 px/sec²
+    // Фиксированная постоянная скорость (как в Chrome Dino)
+    BASE_SPEED: 450, // px/sec - постоянная скорость, не меняется
+    // Гравитация: 0.6 px/frame → 0.6 * 60 * 60 = 2160 px/sec²
     gravity: 2160, // Гравитация (пикселей в секунду²)
     
     // Debug флаг (можно включить для проверки)
@@ -115,7 +114,7 @@ const Game = {
         // Сброс игры
         this.score = 0;
         this.coinsEarned = 0;
-        this.baseSpeed = 300; // Начальная скорость: 5 px/frame * 60 = 300 px/sec
+        // Скорость всегда постоянная - не меняем
         this.elapsedTime = 0;
         this.lastTime = performance.now();
         this.gameStage = 'early';
@@ -126,7 +125,8 @@ const Game = {
         this.coinTimer = 0;
         this.obstacleTimer = 0;
         this.mountainCooldown = 0;
-        this.minObstacleDistance = 0;
+        // Минимальная дистанция между препятствиями (постоянная)
+        this.minObstacleDistance = this.BASE_SPEED * 1.5; // 1.5 секунды между препятствиями
         
         // Инициализация динозавра
         const scale = this.getScale();
@@ -170,7 +170,7 @@ const Game = {
         
         // Debug: логируем dt и скорость (можно включить через Game.debug = true)
         if (this.debug && Math.floor(this.elapsedTime * 10) % 10 === 0) {
-            console.log(`[DEBUG] dt: ${dt.toFixed(4)}s (${(1/dt).toFixed(1)} FPS), speed: ${this.baseSpeed.toFixed(1)}px/s, elapsed: ${this.elapsedTime.toFixed(1)}s`);
+            console.log(`[DEBUG] dt: ${dt.toFixed(4)}s (${(1/dt).toFixed(1)} FPS), speed: ${this.BASE_SPEED}px/s (const), elapsed: ${this.elapsedTime.toFixed(1)}s`);
         }
         
         // Обновляем время игры
@@ -179,8 +179,7 @@ const Game = {
         // Обновляем стадию игры
         this.updateGameStage();
         
-        // Обновляем скорость (увеличивается со временем)
-        this.updateSpeed(dt);
+        // Скорость постоянная - не обновляем
         
         // Очистка
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -200,14 +199,13 @@ const Game = {
         // Обновляем и рисуем объекты (с dt)
         this.updateObjects(dt);
         
-        // Обновляем счет (time-based)
+        // Обновляем счет (time-based, стабильно)
         // Старое: score += 0.1 за кадр → на 60 FPS = 6 очков/сек
-        // Но для более плавного увеличения используем 10 очков/сек
-        this.score += dt * 10; // 10 очков в секунду
+        this.score += dt * 6; // 6 очков в секунду (стабильно, не зависит от FPS)
         
         // Debug логирование
         if (this.debug && Math.floor(this.score) % 100 === 0) {
-            console.log(`dt: ${dt.toFixed(4)}s, speed: ${this.baseSpeed.toFixed(1)}px/s, score: ${Math.floor(this.score)}`);
+            console.log(`dt: ${dt.toFixed(4)}s, speed: ${this.BASE_SPEED}px/s (const), score: ${Math.floor(this.score)}`);
         }
         
         // Обновляем UI
@@ -227,21 +225,6 @@ const Game = {
         }
     },
     
-    // Обновление скорости
-    updateSpeed(dt) {
-        // Скорость увеличивается со временем
-        // Старое увеличение: 0.3 px/frame за 100 очков
-        // На 60 FPS: 0.3 * 60 = 18 px/sec за 100 очков
-        // За секунду набирается ~10 очков, так что ~1.8 px/sec за секунду
-        // Но для более плавного увеличения используем 3 px/sec за секунду
-        const speedIncrease = 3; // пикселей/сек за секунду
-        this.baseSpeed += speedIncrease * dt;
-        // Максимальная скорость: старая была ~12 px/frame → 12 * 60 = 720 px/sec
-        this.baseSpeed = Math.min(this.baseSpeed, 720); // Максимальная скорость
-        
-        // Обновляем минимальную дистанцию между препятствиями
-        this.minObstacleDistance = this.baseSpeed * 1.5; // 1.5 секунды между препятствиями
-    },
     
     // Рисование фона
     drawBackground() {
@@ -284,9 +267,9 @@ const Game = {
         // Спавн препятствий
         if (this.obstacleTimer <= 0) {
             this.spawnObstacle();
-            // Интервал препятствий зависит от скорости
+            // Интервал препятствий (постоянный, так как скорость постоянная)
             const minDistance = this.minObstacleDistance;
-            const interval = minDistance / this.baseSpeed;
+            const interval = minDistance / this.BASE_SPEED;
             this.obstacleTimer = interval + Math.random() * 0.3;
         }
     },
@@ -406,7 +389,7 @@ const Game = {
         // Кактусы
         for (let i = this.cacti.length - 1; i >= 0; i--) {
             const cactus = this.cacti[i];
-            cactus.update(this.baseSpeed, dt);
+            cactus.update(this.BASE_SPEED, dt);
             cactus.draw(this.ctx, this.getScale());
             
             if (cactus.collidesWith(this.dino, this.getScale())) {
@@ -422,7 +405,7 @@ const Game = {
         // Цветочки
         for (let i = this.flowers.length - 1; i >= 0; i--) {
             const flower = this.flowers[i];
-            flower.update(this.baseSpeed, dt);
+            flower.update(this.BASE_SPEED, dt);
             flower.draw(this.ctx, this.getScale());
             
             if (flower.collidesWith(this.dino, this.getScale())) {
@@ -438,7 +421,7 @@ const Game = {
         // Монеты
         for (let i = this.coins.length - 1; i >= 0; i--) {
             const coin = this.coins[i];
-            coin.update(this.baseSpeed, dt);
+            coin.update(this.BASE_SPEED, dt);
             coin.draw(this.ctx);
             
             if (coin.collidesWith(this.dino, this.getScale())) {
@@ -446,7 +429,7 @@ const Game = {
                 this.coinsEarned++;
                 Storage.addCoins(1);
                 UI.updateCoins(Storage.getCoins());
-                UI.showNotification('+1 🪙', 'success');
+                UI.showNotification('+1 R', 'success');
             }
             
             if (coin.isOffScreen()) {
@@ -457,7 +440,7 @@ const Game = {
         // Горы
         for (let i = this.mountains.length - 1; i >= 0; i--) {
             const mountain = this.mountains[i];
-            mountain.update(this.baseSpeed, dt, this.dino);
+            mountain.update(this.BASE_SPEED, dt, this.dino);
             mountain.draw(this.ctx, this.getScale());
             
             if (mountain.collidesWith(this.dino, this.getScale())) {
@@ -633,23 +616,33 @@ class Coin {
         ctx.translate(this.x, this.y);
         ctx.rotate(this.rotation);
         
-        // Монета
-        ctx.fillStyle = '#FFD700';
+        // Внешний ободок (темнее)
+        ctx.fillStyle = '#E0A81B';
         ctx.beginPath();
         ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
         ctx.fill();
         
-        // Ободок
-        ctx.strokeStyle = '#FFA500';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        // Основной круг (мягкий желтый)
+        ctx.fillStyle = '#F5C84B';
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius * 0.85, 0, Math.PI * 2);
+        ctx.fill();
         
-        // Символ
-        ctx.fillStyle = '#FFA500';
-        ctx.font = `${this.radius * 0.8}px Arial`;
+        // Внутренний блик (мягкое свечение)
+        const gradient = ctx.createRadialGradient(0, -this.radius * 0.3, 0, 0, -this.radius * 0.3, this.radius * 0.6);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius * 0.85, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Буква R по центру
+        ctx.fillStyle = '#B87900';
+        ctx.font = `700 ${this.radius * 1.1}px system-ui, -apple-system, Arial, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('🪙', 0, 0);
+        ctx.fillText('R', 0, 1); // Чуть смещение по Y для визуального центра
         
         ctx.restore();
     }
