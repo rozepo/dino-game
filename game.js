@@ -49,6 +49,10 @@ const Game = {
             return false;
         }
         this.ctx = this.canvas.getContext('2d');
+        // (Опционально) для пиксель-арта — отключаем сглаживание
+        if (this.ctx) {
+            this.ctx.imageSmoothingEnabled = false;
+        }
         this.initSkins();
         this.resizeCanvas();
         this.initDino();
@@ -112,19 +116,14 @@ const Game = {
         const containerW = rect.width || container.clientWidth || 800;
         const containerH = rect.height || container.clientHeight || 400;
 
-        // Держим соотношение сторон как у "трассы" (800x400 => 2:1),
-        // чтобы на мобилке поле не было слишком высоким, а персонаж не казался крошечным.
-        const targetAspect = 2; // width / height
-        let width = containerW;
-        let height = containerW / targetAspect;
-        if (height > containerH) {
-            height = containerH;
-            width = height * targetAspect;
-        }
+        // Фиксируем пропорции 2:1 (как 800x400)
+        // Важно: если max-height "режет" viewport, ограничиваем width по высоте, чтобы не ломать пропорции.
+        const width = Math.max(1, Math.round(Math.min(containerW, containerH * 2)));
+        const targetHeight = Math.max(1, Math.round(width / 2));
         
-        if (width > 0 && height > 0) {
+        if (width > 0 && targetHeight > 0) {
             this.canvas.width = width;
-            this.canvas.height = height;
+            this.canvas.height = targetHeight;
         } else {
             this.canvas.width = 800;
             this.canvas.height = 400;
