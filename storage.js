@@ -1,5 +1,7 @@
 // Модуль для работы с localStorage и Supabase (облачное сохранение)
 const Storage = {
+    // Debug-флаг для логов синхронизации (включить: Storage.DEBUG = true)
+    DEBUG: false,
     // Ключи для localStorage (гостевой режим)
     KEYS: {
         COINS: 'dino_game_coins',
@@ -47,14 +49,45 @@ const Storage = {
         }
     },
 
-    getPurchasedSkins() {
+    _log(...args) {
+        if (this.DEBUG) console.log('[Storage]', ...args);
+    },
+
+    _normalizePurchasedSkins(purchased) {
+        let arr = Array.isArray(purchased) ? purchased.slice() : [];
+        arr = arr.filter(Boolean);
+        if (!arr.includes('dino')) arr.unshift('dino');
+        return [...new Set(arr)];
+    },
+
+    _readLocalSkins() {
         this.ensureSkinsInitialized();
+        let purchased = [];
         try {
-            const arr = JSON.parse(localStorage.getItem('purchasedSkins') || '[]');
-            return Array.isArray(arr) ? arr : ['dino'];
+            purchased = JSON.parse(localStorage.getItem('purchasedSkins') || '[]');
         } catch {
-            return ['dino'];
+            purchased = [];
         }
+        purchased = this._normalizePurchasedSkins(purchased);
+        const selected = localStorage.getItem('selectedSkin') || 'dino';
+        return {
+            purchasedSkins: purchased,
+            selectedSkin: purchased.includes(selected) ? selected : 'dino'
+        };
+    },
+
+    _writeLocalSkins(purchasedSkins, selectedSkin) {
+        const purchased = this._normalizePurchasedSkins(purchasedSkins);
+        const selected = purchased.includes(selectedSkin) ? selectedSkin : 'dino';
+        localStorage.setItem('purchasedSkins', JSON.stringify(purchased));
+        localStorage.setItem('selectedSkin', selected);
+    },
+
+    getPurchasedSkins() {
+        if (Auth.isLoggedIn() && this.cloudState) {
+            return this._normalizePurchasedSkins(this.cloudState.purchased_skins);
+        }
+        return this._readLocalSkins().purchasedSkins;
     },
 
     isSkinPurchased(skinId) {
@@ -63,24 +96,60 @@ const Storage = {
 
     purchaseSkin(skinId) {
         const purchased = this.getPurchasedSkins();
-        if (!purchased.includes(skinId)) {
-            purchased.push(skinId);
-            localStorage.setItem('purchasedSkins', JSON.stringify([...new Set(purchased)]));
+        const next = this._normalizePurchasedSkins([...purchased, skinId]);
+        if (Auth.isLoggedIn() && this.cloudState) {
+            this.cloudState.purchased_skins = next;
+            this.syncToCloud();
         }
+        this._writeLocalSkins(next, this.getSelectedSkin());
         return true;
     },
 
     getSelectedSkin() {
-        this.ensureSkinsInitialized();
-        const skin = localStorage.getItem('selectedSkin') || 'dino';
-        return this.isSkinPurchased(skin) ? skin : 'dino';
+        if (Auth.isLoggedIn() && this.cloudState) {
+            const skin = this.cloudState.selected_skin || 'dino';
+            return this.isSkinPurchased(skin) ? skin : 'dino';
+        }
+        return this._readLocalSkins().selectedSkin;
     },
 
     setSelectedSkin(skinId) {
         // Выбирать можно только купленные
         if (!this.isSkinPurchased(skinId)) return false;
-        localStorage.setItem('selectedSkin', skinId);
+        if (Auth.isLoggedIn() && this.cloudState) {
+            this.cloudState.selected_skin = skinId;
+            this.syncToCloud();
+        }
+        this._writeLocalSkins(this.getPurchasedSkins(), skinId);
         return true;
+    },
+
+    // Слить облачные/локальные скины без потерь (при логине приоритет облаку, но пустое облако не затирает локал)
+    _mergeSkinsCloudLocal() {
+        if (!this.cloudState) return { changedCloud: false };
+
+        const local = this._readLocalSkins();
+        const cloudPurchased = this._normalizePurchasedSkins(this.cloudState.purchased_skins);
+        const localPurchased = this._normalizePurchasedSkins(local.purchasedSkins);
+        const mergedPurchased = [...new Set([...cloudPurchased, ...localPurchased])];
+
+        const selected =
+            (this.cloudState.selected_skin && mergedPurchased.includes(this.cloudState.selected_skin))
+                ? this.cloudState.selected_skin
+                : (local.selectedSkin && mergedPurchased.includes(local.selectedSkin))
+                    ? local.selectedSkin
+                    : 'dino';
+
+        const changedCloud =
+            JSON.stringify(cloudPurchased) !== JSON.stringify(mergedPurchased) ||
+            (this.cloudState.selected_skin || 'dino') !== selected;
+
+        this.cloudState.purchased_skins = mergedPurchased;
+        this.cloudState.selected_skin = selected;
+        this._writeLocalSkins(mergedPurchased, selected);
+
+        this._log('skins merge', { cloudPurchased, localPurchased, mergedPurchased, selected, changedCloud });
+        return { changedCloud };
     },
     
     // Загрузить или создать облачный профиль
@@ -116,7 +185,9 @@ const Storage = {
                     coins: data.coins || 0,
                     high_score: data.high_score || 0,
                     max_jumps: data.max_jumps || 1,
-                    has_mask: data.has_mask || false
+                    has_mask: data.has_mask || false,
+                    purchased_skins: Array.isArray(data.purchased_skins) ? data.purchased_skins : [],
+                    selected_skin: data.selected_skin || 'dino'
                 };
             } else {
                 // Профиль не найден - создаём новый
@@ -126,6 +197,8 @@ const Storage = {
                     high_score: 0,
                     max_jumps: 1,
                     has_mask: false,
+                    purchased_skins: ['dino'],
+                    selected_skin: 'dino',
                     updated_at: new Date().toISOString()
                 };
                 
@@ -145,13 +218,34 @@ const Storage = {
                     coins: newData.coins || 0,
                     high_score: newData.high_score || 0,
                     max_jumps: newData.max_jumps || 1,
-                    has_mask: newData.has_mask || false
+                    has_mask: newData.has_mask || false,
+                    purchased_skins: Array.isArray(newData.purchased_skins) ? newData.purchased_skins : ['dino'],
+                    selected_skin: newData.selected_skin || 'dino'
                 };
+            }
+
+            // Применяем/сливаем скины (и при необходимости доталкиваем в облако)
+            const { changedCloud } = this._mergeSkinsCloudLocal();
+            if (changedCloud) {
+                await this.forceSync();
             }
         } catch (error) {
             console.error('Ошибка ensureLoaded:', error);
             this.cloudState = null;
         }
+    },
+
+    _cloudPayload(userId) {
+        return {
+            user_id: userId,
+            coins: this.cloudState.coins,
+            high_score: this.cloudState.high_score,
+            max_jumps: this.cloudState.max_jumps,
+            has_mask: this.cloudState.has_mask,
+            purchased_skins: this._normalizePurchasedSkins(this.cloudState.purchased_skins),
+            selected_skin: this.getSelectedSkin(),
+            updated_at: new Date().toISOString()
+        };
     },
     
     // Синхронизация с облаком (с дебаунсом)
@@ -174,12 +268,7 @@ const Storage = {
                 const { error } = await window.supabaseClient
                     .from('player_state')
                     .upsert({
-                        user_id: userId,
-                        coins: this.cloudState.coins,
-                        high_score: this.cloudState.high_score,
-                        max_jumps: this.cloudState.max_jumps,
-                        has_mask: this.cloudState.has_mask,
-                        updated_at: new Date().toISOString()
+                        ...this._cloudPayload(userId)
                     }, {
                         onConflict: 'user_id'
                     });
@@ -201,32 +290,100 @@ const Storage = {
         }
         
         if (!Auth.isLoggedIn() || !this.cloudState) {
-            return;
+            return true;
         }
         
         const userId = Auth.getUserId();
-        if (!userId) return;
+        if (!userId) return false;
         
         try {
             const { error } = await window.supabaseClient
                 .from('player_state')
                 .upsert({
-                    user_id: userId,
-                    coins: this.cloudState.coins,
-                    high_score: this.cloudState.high_score,
-                    max_jumps: this.cloudState.max_jumps,
-                    has_mask: this.cloudState.has_mask,
-                    updated_at: new Date().toISOString()
+                    ...this._cloudPayload(userId)
                 }, {
                     onConflict: 'user_id'
                 });
             
             if (error) {
                 console.error('Ошибка forceSync:', error);
+                return false;
             }
+            return true;
         } catch (error) {
             console.error('Ошибка forceSync:', error);
+            return false;
         }
+    },
+
+    // Атомарная покупка скина (coins + purchasedSkins + selectedSkin одним сохранением)
+    async buySkin(skinId, price) {
+        if (!skinId) return { success: false, reason: 'invalid' };
+        if (this.isSkinPurchased(skinId)) {
+            // Уже куплен — просто выбираем
+            const ok = await this.selectSkin(skinId);
+            return { success: ok, reason: ok ? 'selected' : 'sync_failed' };
+        }
+
+        const coins = this.getCoins();
+        if (coins < price) return { success: false, reason: 'insufficient' };
+
+        // Гость: просто локально
+        if (!Auth.isLoggedIn() || !this.cloudState) {
+            this.addCoins(-price);
+            this.purchaseSkin(skinId);
+            this.setSelectedSkin(skinId);
+            return { success: true };
+        }
+
+        // Логин: откат при ошибке облака
+        const prev = {
+            coins: this.cloudState.coins,
+            purchased_skins: this._normalizePurchasedSkins(this.cloudState.purchased_skins),
+            selected_skin: this.cloudState.selected_skin || 'dino'
+        };
+
+        const nextPurchased = this._normalizePurchasedSkins([...prev.purchased_skins, skinId]);
+        const nextSelected = skinId;
+
+        this.cloudState.coins = prev.coins - price;
+        this.cloudState.purchased_skins = nextPurchased;
+        this.cloudState.selected_skin = nextSelected;
+        this._writeLocalSkins(nextPurchased, nextSelected);
+
+        const ok = await this.forceSync();
+        if (!ok) {
+            // rollback
+            this.cloudState.coins = prev.coins;
+            this.cloudState.purchased_skins = prev.purchased_skins;
+            this.cloudState.selected_skin = prev.selected_skin;
+            this._writeLocalSkins(prev.purchased_skins, prev.selected_skin);
+            return { success: false, reason: 'sync_failed' };
+        }
+
+        return { success: true };
+    },
+
+    // Выбор скина с синком в облако (с откатом)
+    async selectSkin(skinId) {
+        if (!this.isSkinPurchased(skinId)) return false;
+
+        if (!Auth.isLoggedIn() || !this.cloudState) {
+            this.setSelectedSkin(skinId);
+            return true;
+        }
+
+        const prev = this.cloudState.selected_skin || 'dino';
+        this.cloudState.selected_skin = skinId;
+        this._writeLocalSkins(this.getPurchasedSkins(), skinId);
+
+        const ok = await this.forceSync();
+        if (!ok) {
+            this.cloudState.selected_skin = prev;
+            this._writeLocalSkins(this.getPurchasedSkins(), prev);
+            return false;
+        }
+        return true;
     },
     
     // Получить монеты
@@ -328,6 +485,7 @@ const Storage = {
         const guestHighScore = parseInt(localStorage.getItem(this.KEYS.HIGH_SCORE) || '0', 10);
         const guestMaxJumps = parseInt(localStorage.getItem(this.KEYS.MAX_JUMPS) || '1', 10);
         const guestHasMask = localStorage.getItem(this.KEYS.MASK) === 'true';
+        const guestSkins = this._readLocalSkins();
         
         // Загружаем облачный профиль
         await this.ensureLoaded();
@@ -349,6 +507,16 @@ const Storage = {
             this.cloudState.high_score = Math.max(this.cloudState.high_score, guestHighScore);
             this.cloudState.max_jumps = Math.max(this.cloudState.max_jumps, guestMaxJumps);
             this.cloudState.has_mask = this.cloudState.has_mask || guestHasMask;
+
+            // Переносим/сливаем скины (без потерь)
+            this.cloudState.purchased_skins = [...new Set([
+                ...this._normalizePurchasedSkins(this.cloudState.purchased_skins),
+                ...this._normalizePurchasedSkins(guestSkins.purchasedSkins)
+            ])];
+            this.cloudState.selected_skin = (guestSkins.selectedSkin && this.cloudState.purchased_skins.includes(guestSkins.selectedSkin))
+                ? guestSkins.selectedSkin
+                : (this.cloudState.selected_skin || 'dino');
+            this._writeLocalSkins(this.cloudState.purchased_skins, this.cloudState.selected_skin);
             
             // Синхронизируем
             await this.forceSync();

@@ -71,25 +71,54 @@ const Shop = {
         container.appendChild(skinsTitle);
 
         const selectedSkin = Storage.getSelectedSkin();
+        const coins = Storage.getCoins();
+        const danaSrc = (typeof Game !== 'undefined' && Game.SKIN_ASSETS && Game.SKIN_ASSETS.dana)
+            ? Game.SKIN_ASSETS.dana
+            : 'dana_sprite.png?v=2';
+
         this.skinItems.forEach(skin => {
             const isOwned = Storage.isSkinPurchased(skin.id) || skin.id === 'dino';
             const isSelected = selectedSkin === skin.id;
+            const canAfford = coins >= skin.price;
 
             const skinEl = document.createElement('div');
-            skinEl.className = `shop-item ${isOwned ? 'owned' : ''}`;
+            skinEl.className = `shop-item ${isOwned ? 'owned' : ''} ${isSelected ? 'selected' : ''}`;
 
             let actionHtml = '';
             if (!isOwned && skin.id === 'dana') {
-                actionHtml = `<button class="btn btn-small btn-primary" data-skin-id="${skin.id}" data-skin-action="buy">
-                    Купить за ${skin.price}
-                </button>`;
+                if (!canAfford) {
+                    actionHtml = `<button class="btn btn-small btn-primary" disabled>
+                        Недостаточно монет
+                    </button>`;
+                } else {
+                    actionHtml = `<button class="btn btn-small btn-primary" data-skin-id="${skin.id}" data-skin-action="buy">
+                        Купить <span class="coin-icon coin-sm">R</span> ${skin.price}
+                    </button>`;
+                }
             } else {
                 actionHtml = isSelected
                     ? '<button class="btn btn-small btn-secondary" disabled>Выбран</button>'
                     : `<button class="btn btn-small btn-secondary" data-skin-id="${skin.id}" data-skin-action="select">Выбрать</button>`;
             }
 
+            const previewHtml = skin.id === 'dino'
+                ? `
+                    <div class="skin-preview skin-preview-dino" aria-label="Dino preview">
+                        <div class="dino-mini-body"></div>
+                        <div class="dino-mini-head"></div>
+                        <div class="dino-mini-horn"></div>
+                    </div>
+                `
+                : `
+                    <div class="skin-preview" aria-label="Dana preview">
+                        <img class="skin-preview-img" src="${danaSrc}" alt="Dana" />
+                    </div>
+                `;
+
             skinEl.innerHTML = `
+                <div class="shop-item-preview">
+                    ${previewHtml}
+                </div>
                 <div class="shop-item-info">
                     <div class="shop-item-name">
                         ${skin.name}
@@ -97,7 +126,7 @@ const Shop = {
                     </div>
                     <div class="shop-item-desc">${skin.desc}</div>
                     <div class="shop-item-price">
-                        <span>🪙</span>
+                        <span class="coin-icon coin-sm">R</span>
                         <span>${skin.price}</span>
                     </div>
                 </div>
@@ -128,7 +157,7 @@ const Shop = {
                     <div class="shop-item-name">${item.name}</div>
                     <div class="shop-item-desc">${item.desc}</div>
                     <div class="shop-item-price">
-                        <span>🪙</span>
+                        <span class="coin-icon coin-sm">R</span>
                         <span>${item.price}</span>
                     </div>
                 </div>
@@ -149,6 +178,11 @@ const Shop = {
         const balanceEl = document.getElementById('shopBalance');
         if (balanceEl) {
             balanceEl.textContent = Storage.getCoins();
+        }
+
+        const headerCoinsEl = document.getElementById('shopHeaderCoins');
+        if (headerCoinsEl) {
+            headerCoinsEl.textContent = Storage.getCoins();
         }
     },
 
@@ -227,30 +261,32 @@ Shop.handleSkinAction = async function(action, skinId) {
 
     if (action === 'buy') {
         const price = 1000;
-        const coins = Storage.getCoins();
-        if (coins < price) {
-            UI.showNotification('Недостаточно монет', 'error');
+        const res = await Storage.buySkin(skinId, price);
+        if (!res.success) {
+            if (res.reason === 'insufficient') {
+                UI.showNotification('Недостаточно монет', 'error');
+            } else if (res.reason === 'sync_failed') {
+                UI.showNotification('Ошибка синхронизации покупки. Попробуйте ещё раз.', 'error');
+            } else {
+                UI.showNotification('Ошибка покупки', 'error');
+            }
             return;
         }
 
-        // Покупаем: coins -= 1000
-        Storage.addCoins(-price);
-        Storage.purchaseSkin(skinId);
-        Storage.setSelectedSkin(skinId);
-
         UI.updateCoins(Storage.getCoins());
         UI.showNotification('Скин куплен!', 'success');
-        await Storage.forceSync();
         this.render();
         return;
     }
 
     if (action === 'select') {
-        const ok = Storage.setSelectedSkin(skinId);
-        if (ok) {
-            UI.showNotification('Скин выбран', 'success');
-            this.render();
+        const ok = await Storage.selectSkin(skinId);
+        if (!ok) {
+            UI.showNotification('Ошибка синхронизации. Попробуйте ещё раз.', 'error');
+            return;
         }
+        UI.showNotification('Скин выбран', 'success');
+        this.render();
     }
 };
 

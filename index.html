@@ -22,7 +22,7 @@
                 </div>
                 <div class="hud-right">
                     <div class="hud-coins">
-                        <span class="coin-icon">🪙</span>
+                        <span class="coin-icon coin-sm">R</span>
                         <span class="hud-value" id="hudCoins">0</span>
                     </div>
                     <div class="hud-jump-level">
@@ -52,7 +52,10 @@
                         <div class="home-stats">
                             <div class="stat-card">
                                 <span class="stat-label">Монеты</span>
-                                <span class="stat-value" id="homeCoins">0</span>
+                                <span class="stat-value stat-coin">
+                                    <span class="coin-icon coin-md">R</span>
+                                    <span id="homeCoinsValue">0</span>
+                                </span>
                             </div>
                             <div class="stat-card">
                                 <span class="stat-label">Рекорд</span>
@@ -112,7 +115,10 @@
                             </div>
                             <div class="result-item">
                                 <span class="result-label">Монеты</span>
-                                <span class="result-value" id="finalCoins">+0</span>
+                                <span class="result-value result-coins">
+                                    <span class="coin-icon coin-sm">R</span>
+                                    <span id="finalCoinsValue">+0</span>
+                                </span>
                             </div>
                         </div>
                         <div class="button-group">
@@ -126,16 +132,22 @@
                 <!-- Экран магазина -->
                 <div class="screen shop-screen hidden" id="shopScreen">
                     <div class="screen-content">
-                        <div class="shop-header">
-                            <h2 class="screen-title">Магазин</h2>
-                            <button class="btn-close" id="closeShopBtn">✕</button>
+                        <div class="shop-sticky-header">
+                            <button class="shop-back-btn" id="shopBackBtn">← Назад</button>
+                            <div class="shop-sticky-title">Магазин</div>
+                            <div class="shop-sticky-coins">
+                                <span class="coin-icon coin-sm">R</span>
+                                <span class="shop-sticky-coins-value" id="shopHeaderCoins">0</span>
+                            </div>
                         </div>
-                        <div class="shop-balance">
-                            <span class="coin-icon">🪙</span>
-                            <span class="balance-value" id="shopBalance">0</span>
-                        </div>
-                        <div class="shop-items" id="shopItems">
-                            <!-- Товары будут добавлены через JS -->
+                        <div class="shop-scroll">
+                            <div class="shop-balance">
+                                <span class="coin-icon coin-md">R</span>
+                                <span class="balance-value" id="shopBalance">0</span>
+                            </div>
+                            <div class="shop-items" id="shopItems">
+                                <!-- Товары будут добавлены через JS -->
+                            </div>
                         </div>
                     </div>
                 </div>

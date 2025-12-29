@@ -61,9 +61,12 @@ const Game = {
         this.defaultSkin = 'dino';
 
         // second skin = "dana" (PNG рядом с файлами игры)
+        this.SKIN_ASSETS = this.SKIN_ASSETS || {
+            dana: 'dana_sprite.png?v=2'
+        };
         this.skinImages = this.skinImages || {};
         const danaImg = new Image();
-        danaImg.src = 'dana_sprite.png';
+        danaImg.src = this.SKIN_ASSETS.dana;
         this.skinImages.dana = danaImg;
     },
     
@@ -470,7 +473,7 @@ const Game = {
                 this.coinsEarned++;
                 Storage.addCoins(1);
                 UI.updateCoins(Storage.getCoins());
-                UI.showNotification('+1 R', 'success');
+                UI.showNotification(`+1 <span class="coin-icon coin-sm">R</span>`, 'success');
             }
             
             if (coin.isOffScreen()) {

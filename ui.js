@@ -16,7 +16,7 @@ const UI = {
     
     // Обновление Home экрана
     updateHomeScreen() {
-        const coinsEl = document.getElementById('homeCoins');
+        const coinsEl = document.getElementById('homeCoinsValue');
         const highScoreEl = document.getElementById('homeHighScore');
         
         if (coinsEl) coinsEl.textContent = Storage.getCoins();
@@ -117,7 +117,7 @@ const UI = {
     // Показать Game Over экран
     async showGameOver(score, coinsEarned) {
         const scoreEl = document.getElementById('finalScore');
-        const coinsEl = document.getElementById('finalCoins');
+        const coinsEl = document.getElementById('finalCoinsValue');
         
         if (scoreEl) scoreEl.textContent = Math.floor(score);
         if (coinsEl) {
@@ -128,7 +128,7 @@ const UI = {
         // Проверяем рекорд
         const isNewRecord = Storage.setHighScore(Math.floor(score));
         if (isNewRecord) {
-            UI.showNotification('🎉 Новый рекорд!', 'success');
+            UI.showNotification('Новый рекорд!', 'success');
         }
         
         // Принудительная синхронизация после Game Over
@@ -142,7 +142,12 @@ const UI = {
         const notification = document.getElementById('notification');
         if (!notification) return;
 
-        notification.textContent = message;
+        // Поддерживаем простой HTML для coin-icon (сообщения генерируются только внутри приложения)
+        if (typeof message === 'string' && message.includes('<')) {
+            notification.innerHTML = message;
+        } else {
+            notification.textContent = message;
+        }
         notification.className = `notification ${type}`;
         notification.classList.add('show');
 
@@ -226,12 +231,13 @@ const UI = {
 
         // Кнопка закрытия магазина
         const closeShopBtn = document.getElementById('closeShopBtn');
-        if (closeShopBtn) {
-            closeShopBtn.addEventListener('click', () => {
-                this.showScreen('homeScreen');
-                this.updateHomeScreen();
-            });
-        }
+        const shopBackBtn = document.getElementById('shopBackBtn');
+        const backHandler = () => {
+            this.showScreen('homeScreen');
+            this.updateHomeScreen();
+        };
+        if (closeShopBtn) closeShopBtn.addEventListener('click', backHandler);
+        if (shopBackBtn) shopBackBtn.addEventListener('click', backHandler);
 
         // Кнопка "Домой"
         const homeBtn = document.getElementById('homeBtn');

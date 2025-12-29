@@ -133,7 +133,26 @@ body {
     color: var(--text);
 }
 
-.coin-icon, .jump-icon {
+/* ===== Единый UI-компонент монеты (как на трассе) ===== */
+.coin-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #F6D04D;
+    border: 2px solid #D2A72A;
+    color: #6B3F00;
+    font-weight: 900;
+    line-height: 1;
+    flex: 0 0 auto;
+    user-select: none;
+}
+
+.coin-sm { width: 18px; height: 18px; font-size: 12px; }
+.coin-md { width: 22px; height: 22px; font-size: 14px; }
+.coin-lg { width: 28px; height: 28px; font-size: 18px; }
+
+.jump-icon {
     font-size: 20px;
     line-height: 1;
 }
@@ -149,11 +168,11 @@ body {
     backdrop-filter: blur(4px);
     border-radius: 24px;
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
     z-index: 200;
-    padding: 20px;
-    overflow-y: auto;
+    padding: 16px;
+    overflow: hidden;
 }
 
 .game-overlay.hidden {
@@ -165,9 +184,12 @@ body {
     border-radius: 24px;
     box-shadow: 0 8px 32px var(--shadow);
     width: 100%;
-    max-width: 500px;
-    max-height: 90vh;
-    overflow-y: auto;
+    max-width: 640px;
+    height: 100%;
+    max-height: calc(100vh - 32px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     animation: slideUp 0.3s ease-out;
 }
 
@@ -187,7 +209,11 @@ body {
 }
 
 .screen-content {
-    padding: 32px 24px;
+    padding: 16px;
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 
 /* ===== Home экран ===== */
@@ -228,6 +254,13 @@ body {
     font-size: 28px;
     font-weight: 700;
     color: var(--primary);
+}
+
+.stat-coin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
 }
 
 /* ===== Кнопки ===== */
@@ -343,12 +376,89 @@ body {
     color: var(--primary);
 }
 
+.result-coins {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
 /* ===== Магазин ===== */
 .shop-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
+}
+
+/* Новый sticky-header магазина + нормальный скролл */
+.shop-screen .screen-content {
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.shop-sticky-header {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+
+.shop-back-btn {
+    justify-self: start;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 700;
+    padding: 10px 8px;
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+.shop-back-btn:active {
+    background: var(--bg);
+}
+
+.shop-sticky-title {
+    justify-self: center;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text);
+}
+
+.shop-sticky-coins {
+    justify-self: end;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-weight: 800;
+}
+
+.shop-sticky-coins-value {
+    font-size: 16px;
+    color: var(--text);
+}
+
+.shop-scroll {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 
 .shop-section-title {
@@ -408,6 +518,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 14px;
     transition: all 0.2s ease;
 }
 
@@ -421,8 +532,78 @@ body {
     border-color: var(--success);
 }
 
+.shop-item.selected {
+    border-color: var(--primary);
+    box-shadow: 0 6px 18px var(--shadow-hover);
+}
+
+.shop-item-preview {
+    width: 110px;
+    height: 110px;
+    flex: 0 0 110px;
+    border-radius: 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.skin-preview {
+    width: 96px;
+    height: 96px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.skin-preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.skin-preview-dino {
+    position: relative;
+}
+
+.dino-mini-body {
+    position: absolute;
+    width: 56px;
+    height: 56px;
+    background: #333;
+    border-radius: 10px;
+    bottom: 18px;
+    left: 18px;
+}
+
+.dino-mini-head {
+    position: absolute;
+    width: 34px;
+    height: 26px;
+    background: #333;
+    border-radius: 10px;
+    top: 16px;
+    right: 8px;
+}
+
+.dino-mini-horn {
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 14px solid #ff6b35;
+    top: 4px;
+    right: 18px;
+    transform: rotate(18deg);
+}
+
 .shop-item-info {
     flex: 1;
+    min-width: 0;
 }
 
 .shop-item-name {
