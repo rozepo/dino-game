@@ -282,7 +282,9 @@ Shop.handleSkinAction = async function(action, skinId) {
     if (action === 'select') {
         const ok = await Storage.selectSkin(skinId);
         if (!ok) {
-            UI.showNotification('Ошибка синхронизации. Попробуйте ещё раз.', 'error');
+            const hint = (typeof Storage.getLastSyncErrorHint === 'function') ? Storage.getLastSyncErrorHint() : '';
+            const msg = hint || 'Ошибка синхронизации. Попробуйте ещё раз.';
+            UI.showNotification(msg, 'error');
             return;
         }
         UI.showNotification('Скин выбран', 'success');

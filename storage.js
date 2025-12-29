@@ -2,6 +2,7 @@
 const Storage = {
     // Debug-флаг для логов синхронизации (включить: Storage.DEBUG = true)
     DEBUG: false,
+    lastSyncError: null,
     // Ключи для localStorage (гостевой режим)
     KEYS: {
         COINS: 'dino_game_coins',
@@ -51,6 +52,37 @@ const Storage = {
 
     _log(...args) {
         if (this.DEBUG) console.log('[Storage]', ...args);
+    },
+
+    _setLastSyncError(error, context = '') {
+        this.lastSyncError = error || null;
+        // Всегда пишем в консоль, чтобы было понятно что чинить (schema/RLS/etc)
+        if (error) {
+            const msg = (error.message || error.details || error.hint || String(error));
+            console.warn('[Storage] Supabase sync error', context, msg, error);
+        }
+    },
+
+    getLastSyncErrorMessage() {
+        const e = this.lastSyncError;
+        if (!e) return '';
+        return e.message || e.details || e.hint || String(e);
+    },
+
+    getLastSyncErrorHint() {
+        const msg = (this.getLastSyncErrorMessage() || '').toLowerCase();
+        if (!msg) return '';
+        // Частые причины
+        if (msg.includes('column') && (msg.includes('purchased_skins') || msg.includes('selected_skin'))) {
+            return 'В Supabase таблице player_state нет колонок purchased_skins/selected_skin. Добавьте их (jsonb/text).';
+        }
+        if (msg.includes('row-level security') || msg.includes('rls') || msg.includes('policy')) {
+            return 'Похоже, RLS/политики Supabase запрещают запись в player_state. Проверьте policies для залогиненных пользователей.';
+        }
+        if (msg.includes('jwt') || msg.includes('not authorized') || msg.includes('permission')) {
+            return 'Похоже, нет прав/авторизации на запись. Проверьте авторизацию и права Supabase.';
+        }
+        return '';
     },
 
     _normalizePurchasedSkins(purchased) {
@@ -275,9 +307,11 @@ const Storage = {
                 
                 if (error) {
                     console.error('Ошибка синхронизации:', error);
+                    this._setLastSyncError(error, 'syncToCloud');
                 }
             } catch (error) {
                 console.error('Ошибка syncToCloud:', error);
+                this._setLastSyncError(error, 'syncToCloud(catch)');
             }
         }, 800);
     },
@@ -307,11 +341,14 @@ const Storage = {
             
             if (error) {
                 console.error('Ошибка forceSync:', error);
+                this._setLastSyncError(error, 'forceSync');
                 return false;
             }
+            this._setLastSyncError(null);
             return true;
         } catch (error) {
             console.error('Ошибка forceSync:', error);
+            this._setLastSyncError(error, 'forceSync(catch)');
             return false;
         }
     },
