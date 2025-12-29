@@ -63,7 +63,7 @@ const Game = {
         // second skin = "dana" (PNG рядом с файлами игры)
         this.skinImages = this.skinImages || {};
         const danaImg = new Image();
-        danaImg.src = 'dana_image.png';
+        danaImg.src = 'dana_sprite.png';
         this.skinImages.dana = danaImg;
     },
     
