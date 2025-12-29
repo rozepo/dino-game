@@ -351,6 +351,31 @@ body {
     margin-bottom: 24px;
 }
 
+.shop-section-title {
+    margin: 8px 0 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-light);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.skin-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 3px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: white;
+    background: var(--success);
+    border-radius: 999px;
+    vertical-align: middle;
+}
+
 .shop-balance {
     background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
     color: white;

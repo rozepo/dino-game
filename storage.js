@@ -20,8 +20,67 @@ const Storage = {
         if (Auth.isLoggedIn()) {
             await this.ensureLoaded();
         }
+
+        // Локальные (необлачные) данные: скины персонажа
+        this.ensureSkinsInitialized();
         
         this.isInitialized = true;
+    },
+
+    // ===== СКИНЫ (localStorage, по требованиям: ключи строго purchasedSkins / selectedSkin) =====
+    ensureSkinsInitialized() {
+        // purchasedSkins: JSON-массив id (например ["dino","dana"])
+        let purchased = [];
+        try {
+            purchased = JSON.parse(localStorage.getItem('purchasedSkins') || '[]');
+        } catch {
+            purchased = [];
+        }
+        if (!Array.isArray(purchased)) purchased = [];
+        if (!purchased.includes('dino')) purchased.unshift('dino');
+        localStorage.setItem('purchasedSkins', JSON.stringify([...new Set(purchased)]));
+
+        // selectedSkin: строка id (например "dana")
+        const selected = localStorage.getItem('selectedSkin') || 'dino';
+        if (!purchased.includes(selected)) {
+            localStorage.setItem('selectedSkin', 'dino');
+        }
+    },
+
+    getPurchasedSkins() {
+        this.ensureSkinsInitialized();
+        try {
+            const arr = JSON.parse(localStorage.getItem('purchasedSkins') || '[]');
+            return Array.isArray(arr) ? arr : ['dino'];
+        } catch {
+            return ['dino'];
+        }
+    },
+
+    isSkinPurchased(skinId) {
+        return this.getPurchasedSkins().includes(skinId);
+    },
+
+    purchaseSkin(skinId) {
+        const purchased = this.getPurchasedSkins();
+        if (!purchased.includes(skinId)) {
+            purchased.push(skinId);
+            localStorage.setItem('purchasedSkins', JSON.stringify([...new Set(purchased)]));
+        }
+        return true;
+    },
+
+    getSelectedSkin() {
+        this.ensureSkinsInitialized();
+        const skin = localStorage.getItem('selectedSkin') || 'dino';
+        return this.isSkinPurchased(skin) ? skin : 'dino';
+    },
+
+    setSelectedSkin(skinId) {
+        // Выбирать можно только купленные
+        if (!this.isSkinPurchased(skinId)) return false;
+        localStorage.setItem('selectedSkin', skinId);
+        return true;
     },
     
     // Загрузить или создать облачный профиль

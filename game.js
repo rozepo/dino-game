@@ -49,9 +49,22 @@ const Game = {
             return false;
         }
         this.ctx = this.canvas.getContext('2d');
+        this.initSkins();
         this.resizeCanvas();
         this.initDino();
         return true;
+    },
+
+    // Скины персонажа (изображения)
+    initSkins() {
+        // defaultSkin = "dino" (текущий персонаж)
+        this.defaultSkin = 'dino';
+
+        // second skin = "dana" (PNG рядом с файлами игры)
+        this.skinImages = this.skinImages || {};
+        const danaImg = new Image();
+        danaImg.src = 'dana_image.png';
+        this.skinImages.dana = danaImg;
     },
     
     // Инициализация динозавра
@@ -608,6 +621,37 @@ function initDinoMethods(dino) {
         const scaledX = this.x * scale;
         const scaledY = this.y;
         const ctx = Game.ctx;
+
+        // Скин персонажа (рендер), хитбокс НЕ меняем
+        const selectedSkin = (typeof Storage?.getSelectedSkin === 'function')
+            ? Storage.getSelectedSkin()
+            : (Game.defaultSkin || 'dino');
+
+        if (selectedSkin === 'dana') {
+            const img = Game.skinImages?.dana;
+            if (img && img.complete && (img.naturalWidth || img.width)) {
+                const iw = img.naturalWidth || img.width;
+                const ih = img.naturalHeight || img.height;
+                const ratio = ih > 0 ? (iw / ih) : 1;
+
+                // По высоте ~ как текущий персонаж, якорь снизу (на "земле")
+                let drawH = scaledHeight;
+                let drawW = drawH * ratio;
+
+                // Лёгкое ограничение ширины, чтобы спрайт не был слишком огромным
+                const maxW = scaledWidth * 1.6;
+                if (drawW > maxW && ratio > 0) {
+                    drawW = maxW;
+                    drawH = drawW / ratio;
+                }
+
+                const drawX = scaledX + (scaledWidth - drawW) / 2;
+                const drawY = scaledY + (scaledHeight - drawH);
+                ctx.drawImage(img, drawX, drawY, drawW, drawH);
+                return;
+            }
+            // Если изображение ещё не загрузилось — рисуем дефолт
+        }
         
         // Тело
         ctx.fillStyle = '#333';
