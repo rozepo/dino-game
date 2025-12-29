@@ -109,8 +109,18 @@ const Game = {
         
         // Получаем размеры контейнера
         const rect = container.getBoundingClientRect();
-        const width = rect.width || container.clientWidth || 800;
-        const height = rect.height || container.clientHeight || 400;
+        const containerW = rect.width || container.clientWidth || 800;
+        const containerH = rect.height || container.clientHeight || 400;
+
+        // Держим соотношение сторон как у "трассы" (800x400 => 2:1),
+        // чтобы на мобилке поле не было слишком высоким, а персонаж не казался крошечным.
+        const targetAspect = 2; // width / height
+        let width = containerW;
+        let height = containerW / targetAspect;
+        if (height > containerH) {
+            height = containerH;
+            width = height * targetAspect;
+        }
         
         if (width > 0 && height > 0) {
             this.canvas.width = width;
